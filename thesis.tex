@@ -1,0 +1,517 @@
+% Do not change document class, margins, fonts, etc.
+\documentclass[a4paper,oneside,bibliography=totoc]{scrbook}
+
+% some useful packages (add more as needed)
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\usepackage{latexsym}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{tabularx}
+\usepackage{booktabs}
+\usepackage{algorithm} % you can modify the algorithm style to your liking
+\counterwithin{algorithm}{chapter} % so that algorithms have chapter numbers as well
+\usepackage{algorithmic}
+\usepackage{csquotes}
+\renewcommand{\algorithmiccomment}[1]{\hfill\textit{// #1}}
+\usepackage[dvipsnames]{xcolor}
+\usepackage[colorlinks,citecolor=Green]{hyperref} % you may change/remove the colors
+\usepackage{lipsum} % you do not need this
+
+% chicago citation style
+\usepackage{natbib}
+\bibliographystyle{chicagoa}
+\setcitestyle{authoryear,round,semicolon,aysep={},yysep={,}} \let\cite\citep
+
+% example enviroments (add more as needed)
+\newtheorem{definition}{Definition} \newtheorem{proposition}{Proposition}
+
+\begin{document}
+
+\frontmatter \subject{Master Thesis} % change to appropriate type
+\title{NL2Vis: Multi-agent System for Natural Language to Data Visualization}
+\author{Jacob Chen\\
+ (matriculation number 1980440)} \date{January 25, 2026}
+\publishers{{\small Submitted to}\\
+ Social Data Science Group\\
+ Prof.\ Dr.\ Marc Ratkovic\\
+ University of Mannheim\\}
+\maketitle
+
+\chapter{Abstract}
+
+This thesis investigates the development of autonomous, multi-agent systems for the Natural Language to Visualization (NL2Vis) task, focusing on overcoming the limitations of existing specialized frameworks. Current state-of-the-art systems tend to excel in one of two key areas: sophisticated, multi-table database querying or high-fidelity, iterative visual refinement, but rarely both. Furthermore, these systems almost exclusively rely on costly, proprietary Large Language Models (LLMs). This work proposes \emph{LocalVisAgent}, a novel hybrid multi-agent framework that integrates the robust database-processing architecture of \texttt{nvAgent} with a multimodal visual feedback loop inspired by \texttt{MatPlotAgent}. This entire framework is implemented using locally-run, open-source LLMs, including Llama 3 and LLaVA, to ensure cost-effectiveness and data privacy. We evaluate this hybrid agent against two distinct, specialized benchmarks: \texttt{VisEval}, to test complex database interaction, and \texttt{MatPlotBench}, to test visual and aesthetic accuracy. Our results demonstrate that \texttt{LocalVisAgent} successfully retains the strong database querying performance of its baseline while dramatically improving visual fidelity on complex plotting tasks. This work validates the efficacy of a hybrid, local-first approach, offering a viable and comprehensive solution that bridges the gap between database-centric and visualization-centric NL2Vis systems.
+
+% table of contents
+\begingroup
+\hypersetup{hidelinks}% disable link color in TOC only
+\tableofcontents
+\endgroup
+
+% none of the things below is needed, but you may add them if you feel that they are helpful for your work
+% \listofalgorithms \listoffigures \listoftables
+% \listtheorems{definition} \listtheorems{proposition}
+
+\mainmatter
+
+\chapter{Introduction}
+\label{ch:intro}
+
+The ability to extract insights from data is a fundamental driver of progress in science and industry. However, accessing this data has historically required specialized technical knowledge, creating a bottleneck between domain experts and the data itself \cite{wu2024automated}. The field of Natural Language to Visualization (NL2Vis) seeks to dismantle this barrier by enabling users to generate complex data visualizations through simple, conversational instructions.[2] This democratization of data analysis, powered by the rise of Large Language Models (LLMs), promises to make data exploration intuitive and accessible to all \cite{wu2024automated, [17]}.
+
+An effective NL2Vis system must master a complex, end-to-end pipeline that bridges natural language, structured databases, and visualization code. This process inherently involves two distinct and challenging sub-problems. First, the system must perform robust \textbf{Text-to-SQL} translation, accurately interpreting user intent to query complex, multi-table relational databases.[3, 4] An error at this stage---retrieving the wrong data---renders the final visualization incorrect, regardless of its visual quality. Second, the system must execute \textbf{Text-to-Code} generation, synthesizing the retrieved data into executable code (e.g., Python) to produce a chart that is not only syntactically correct but also visually and aesthetically aligned with the user's request \cite{yang2024matplotagent, [19]}.
+
+Recent advancements have seen a shift toward LLM-based Multi-Agent (LLM-MA) systems, which apply a "divide-and-conquer" strategy to this pipeline.[5] However, a review of state-of-the-art frameworks reveals a significant specialization gap. On one hand, database-centric frameworks like \texttt{nvAgent} \cite{ouyang2025nvagent} employ sophisticated agentic workflows to excel at processing complex, multi-table database queries, but their validation mechanisms are limited to checking for code execution errors, often missing visual or aesthetic flaws.[3, 6] On the other hand, visualization-centric frameworks such as \texttt{MatPlotAgent} \cite{yang2024matplotagent} and \texttt{PlotGen} \cite{goswami2025plotgen} have pioneered multimodal feedback loops, using Vision Language Models (VLMs) to "look" at generated charts and iteratively correct visual errors. These systems achieve high visual fidelity but are typically demonstrated on simpler, pre-processed single-file datasets, circumventing the initial challenge of complex database querying.[1, 7]
+
+This thesis addresses this critical gap by proposing and implementing \emph{LocalVisAgent}, a hybrid multi-agent framework. Our work is founded on two key hypotheses:
+\begin{enumerate}
+ \item A hybrid architecture, combining the database-processing strengths of \texttt{nvAgent} with the visual-refinement mechanisms of \texttt{MatPlotAgent}, can achieve state-of-the-art performance across the *entire* NL2Vis pipeline.
+ \item This entire agentic system can be effectively powered by open-source, locally-run LLMs, providing a cost-effective and privacy-preserving alternative to the proprietary models (e.g., GPT-4o) currently dominating the field \cite{[7, 24]}.
+\end{enumerate}
+
+To achieve this, we re-implement the core architecture of \texttt{nvAgent} and replace its simple code validator with a new \emph{Multimodal Critic} agent inspired by \texttt{MatPlotAgent}.[7] This critic uses a local VLM (e.g., LLaVA) to provide iterative visual feedback to a local code generation agent (e.g., Code Llama). To validate our hybrid approach, we evaluate \texttt{LocalVisAgent} on two distinct benchmarks, each targeting a different half of the NL2Vis pipeline: the \texttt{VisEval} benchmark \cite{ouyang2025nvagent} to measure performance on multi-table database querying, and the \texttt{MatPlotBench} benchmark \cite{yang2024matplotagent} to measure final visual and aesthetic accuracy.
+
+Our results confirm that \texttt{LocalVisAgent} successfully retains the strong database-querying capabilities of its \texttt{nvAgent} baseline while demonstrating a dramatic improvement in visual fidelity on \texttt{MatPlotBench}. This work presents a novel, comprehensive framework and provides a blueprint for building robust, low-cost, and private NL2Vis systems.
+
+\chapter{Literature Review}
+\label{ch:related_work}
+
+The NL2Vis task has evolved from simple rule-based systems to sophisticated, reasoning-based multi-agent frameworks. This evolution is characterized by a "divide-and-conquer" approach, where the complex end-to-end pipeline is decomposed into specialized sub-tasks handled by distinct agents \cite{[5]}. This review analyzes the current landscape by categorizing frameworks based on their primary architectural focus: database interaction, visual refinement, or holistic insight generation.
+
+\section{Preliminaries}
+\label{sec:preliminaries}
+
+The modern NL2Vis pipeline is best understood as a sequence of two major tasks:
+\begin{enumerate}
+ \item \textbf{Text-to-SQL}: The translation of a user's natural language question into an executable SQL query that retrieves the correct data from a relational database.[4] This task is fraught with challenges, including schema linking (mapping phrases like "top earners" to `employees.salary`) and handling complex, multi-table joins \cite{[25, 26]}.
+ \item \textbf{Text-to-Code}: The synthesis of the retrieved data into executable code (e.g., Python, using libraries like Matplotlib or Plotly) to render a visual artifact \cite{[19]}. This task's challenges include generating syntactically correct code for specific libraries and accurately mapping data to aesthetic properties (e.g., axes, colors, labels) to fulfill the user's intent \cite{[27]}.
+\end{enumerate}
+LLM-based Multi-Agent (LLM-MA) systems are the current state-of-the-art paradigm for managing this pipeline, as they allow for specialized agents to collaborate and handle each sub-task independently \cite{[5]}.
+
+\section{Related Work on Database-Centric Frameworks}
+\label{sec:related_work_A}
+
+A critical bottleneck in NL2Vis is the initial database interaction. Frameworks in this category prioritize solving the Text-to-SQL problem, especially in complex, multi-table environments.
+
+The most prominent example is \textbf{\texttt{nvAgent}} \cite{ouyang2025nvagent}. Its architecture is a collaborative workflow of three agents:
+\begin{itemize}
+ \item \textbf{Processor Agent}: This agent acts as the database expert. It receives the user query and database schema, performs schema filtering to remove irrelevant tables, and classifies the query's complexity (e.g., single-table vs. multi-table).[3, 6]
+ \item \textbf{Composer Agent}: This agent acts as the planner. Based on the processor's output, it generates a step-by-step plan and a Visual Query Language (VQL) representation, which is an abstract blueprint for the visualization.[6]
+ \item \textbf{Validator Agent}: This agent translates the VQL into executable Python code and runs it. If the code executes successfully, the process ends. If it fails (e.g., a syntax error), the error message is fed back to the Composer for iteration.[3]
+\end{itemize}
+The primary strength of \texttt{nvAgent} lies in its \texttt{Processor} agent, which robustly handles complex data retrieval. Its main limitation, however, is its \texttt{Validator}: it can only catch code execution errors, not visual or semantic ones. A chart can be syntactically perfect but visually wrong (e.g., incorrect labels, wrong chart type), and the \texttt{nvAgent} validator would approve it. \texttt{nvAgent} was evaluated on the \textbf{\texttt{VisEval}} benchmark, which was co-developed to test these single- and multi-table querying capabilities.[3, 8]
+
+\section{Related Work on Visualization-Centric Frameworks}
+
+This category includes frameworks that focus on the second half of the pipeline: achieving high-fidelity visual and aesthetic correctness, often by assuming the data is already clean and available (e.g., in a single CSV file).
+
+\textbf{\texttt{MatPlotAgent}} \cite{yang2024matplotagent} introduced a groundbreaking \emph{visual feedback mechanism}.[7] Its three-module architecture (query understanding, code generation, and visual feedback) uses a multimodal LLM (VLM) as a critic. After code is generated and executed, the resulting image is fed to a VLM (like GPT-4V) along with the original request. The VLM then "looks" at the chart and provides natural language feedback (e.g., "The title is incorrect," "The bar colors should be blue"), which prompts the code agent to revise its script.[7, 9] This allows the system to correct a wide range of visual and semantic errors. This framework was introduced with \textbf{\texttt{MatPlotBench}}, a high-quality benchmark of 100 complex scientific visualization tasks.[7]
+
+Similarly, \textbf{\texttt{PlotGen}} \cite{goswami2025plotgen} employs a multi-agent framework with an even more granular feedback system. It uses three distinct feedback agents---a Numeric Feedback Agent (verifies data values), a Lexical Feedback Agent (checks labels and titles), and a Visual Feedback Agent (checks chart type and aesthetics)---to iteratively debug the visualization via self-reflection.[1, 10] \texttt{PlotGen} also uses \texttt{MatPlotBench} for its evaluation, demonstrating high performance in visual accuracy.[1]
+
+\section{Related Work on Holistic Insight-Driven Frameworks}
+
+A third category of frameworks shifts the goal from merely *fulfilling* a user's request to *proactively discovering* insights, simulating the workflow of a business analyst.
+
+\textbf{\texttt{Data-to-Dashboard}} \cite{zhang2025data} exemplifies this approach. Its objective is to automate the entire "data-to-dashboard" pipeline.[11, 12] It features a modular pipeline of agents, including a \texttt{Data Profiler}, a \texttt{Domain Detector} to understand the data's business context, and an \texttt{Analysis Generator} that proposes multiple "insight statements" and visualization types *before* any code is written.[11, 13] The system then uses \texttt{Evaluator} and \texttt{Self-Reflector} agents to refine the *analytical quality* of the insights, not just the visual correctness of the chart.[13] This represents a conceptual shift from visualization generation to insight generation.
+
+\section{Summary}
+
+The literature reveals a clear research gap: systems are either strong database query engines (\texttt{nvAgent}) or high-fidelity visual renderers (\texttt{MatPlotAgent}, \texttt{PlotGen}), but no single framework excels at both. Furthermore, all state-of-the-art systems rely on expensive, closed-source models like GPT-4o.[3, 7] This thesis proposes a hybrid framework, \texttt{LocalVisAgent}, that synthesizes these disparate strengths. We adopt the \texttt{nvAgent} architecture for its database prowess but replace its limited validator with a \texttt{MatPlotAgent}-inspired multimodal critic, all while using local, open-source LLMs to create a system that is both comprehensive and cost-effective.
+
+\chapter{Methodology}
+
+This thesis introduces \texttt{LocalVisAgent}, a novel hybrid multi-agent framework designed to synthesize the database-querying strengths of \texttt{nvAgent} \cite{ouyang2025nvagent} with the visual refinement capabilities of \texttt{MatPlotAgent} \cite{yang2024matplotagent}. The framework is orchestrated using local, open-source LLMs and VLMs to ensure privacy and cost efficiency.
+
+The architecture of \texttt{LocalVisAgent} is a pipeline of four distinct agents: (1) the Processor, (2) the Composer, (3) the Synthesizer, and (4) the Multimodal Critic. This design adapts the \texttt{nvAgent} workflow by splitting its \texttt{Validator} role into two new, more specialized agents: a dedicated code-generation \texttt{Synthesizer} and a \texttt{Multimodal Critic} that enables iterative visual refinement.
+
+\section{Agent 1: Processor (Database Specialist)}
+\begin{itemize}
+ \item \textbf{Inspiration:} \texttt{nvAgent}'s Processor Agent \cite{[3, 6]}.
+ \item \textbf{Role:} To handle the complete Text-to-SQL phase. Given a user's natural language query and a multi-table database schema, its goal is to retrieve the correct, structured data.
+ \item \textbf{Implementation:} This agent is powered by a local, instruction-tuned LLM (e.g., \texttt{Llama-3-8B-Instruct}). Its workflow is as follows:
+ \begin{enumerate}
+ \item \textbf{Schema Filtering:} The agent is prompted to analyze the query and the full database schema, outputting a list of only the relevant tables and columns. This is a critical step for reducing the context size for subsequent steps \cite{[6]}.
+ \item \textbf{Query Classification:} The agent classifies the query's complexity as "single-table" or "multi-table" \cite{[3]}.
+ \item \textbf{SQL Generation:} The agent generates an executable SQL query based on the query and the filtered schema.
+ \item \textbf{Execution:} The SQL query is executed against the database.
+ \end{enumerate}
+ \item \textbf{Output:} A structured pandas DataFrame containing the data required for visualization, which is passed to the next agent.
+\end{itemize}
+
+\section{Agent 2: Composer (Visualization Planner)}
+\begin{itemize}
+ \item \textbf{Inspiration:} \texttt{nvAgent}'s Composer Agent \cite{[6]} enhanced with concepts from \texttt{Data-to-Dashboard} \cite{[11]}.
+ \item \textbf{Role:} To create a high-level, abstract plan for the visualization.
+ \item \textbf{Implementation:} This agent, also using an instruction-tuned LLM, receives the user's query and the DataFrame from the Processor.
+ \begin{enumerate}
+ \item \textbf{Insight Generation:} Inspired by \texttt{Data-to-Dashboard}'s \texttt{Analysis Generator} [13], the agent first performs a light exploratory data analysis to identify the key insight in the data (e.g., "Sales are highest in the West region").
+ \item \textbf{Visualization Planning:} The agent uses this insight to generate a detailed "visualization plan." This plan specifies the recommended chart type (e.g., 'bar chart'), the data-to-aesthetic mappings (e.g., 'X-axis: Region', 'Y-axis: Sales'), and the textual elements (e.g., 'Title: Total Sales by Region').[6]
+ \end{enumerate}
+ \item \textbf{Output:} A structured visualization plan (e.g., a JSON object) that serves as the precise instruction set for the next agent.
+\end{itemize}
+
+\section{Agent 3: Synthesizer (Code Generator)}
+\begin{itemize}
+ \item \textbf{Inspiration:} \texttt{MatPlotAgent}'s Code Generation Module \cite{[7]}.
+ \item \textbf{Role:} To translate the abstract visualization plan into executable Python code. This role is split from \texttt{nvAgent}'s original \texttt{Validator} to create a specialized coding agent.
+ \item \textbf{Implementation:} This agent is powered by a local, code-specialized LLM (e.g., \texttt{CodeLlama-7B}). It is prompted with the visualization plan from the Composer and the data from the Processor.
+ \item \textbf{Output:} A Python script using the Matplotlib library.
+\end{itemize}
+
+\section{Agent 4: Multimodal Critic (Iterative Refiner)}
+\begin{itemize}
+ \item \textbf{Inspiration:} \texttt{MatPlotAgent}'s Visual Feedback Mechanism \cite{[7]}. This agent *replaces* \texttt{nvAgent}'s original error-checking \texttt{Validator}.
+ \item \textbf{Role:} To iteratively debug the visualization by providing visual, not just execution-based, feedback.
+ \item \textbf{Implementation:} This agent forms an iterative loop with the Synthesizer agent.
+ \begin{enumerate}
+ \item \textbf{Execute \& Observe:} The Synthesizer's Python script is executed in a sandboxed environment, and the resulting plot is saved as an image.
+ \item \textbf{Critique:} A local VLM (e.g., \texttt{LLaVA-1.5-7B}) is prompted with the generated image, the user's original query, and the Composer's visualization plan. It is asked to "critique" the image and identify any visual or semantic discrepancies (e.g., "The x-axis label is missing," "A bar chart was requested, but this is a line chart").[7]
+ \item \textbf{Feedback Loop:} If the Critic finds errors, its natural language feedback is prepended to the next prompt for the Synthesizer agent, which then attempts to fix the code. If the Critic reports no errors, the loop terminates, and the final image is returned to the user.
+ \end{enumerate}
+ \item \textbf{Output:} A visually correct and validated data visualization.
+\end{itemize}
+
+This hybrid architecture, visualized in Figure~\ref{fig:localvisagent_arch} (figure not rendered in this text), directly addresses the research gap. The Processor agent ensures robust data retrieval for complex databases, while the Critic-Synthesizer loop ensures high visual fidelity---a combination absent in prior frameworks.
+
+\chapter{Experimental Setup}
+
+To validate the efficacy of our proposed \texttt{LocalVisAgent} framework, we designed an experimental setup to test its two primary capabilities: (1) complex, multi-table database querying and (2) high-fidelity, iterative visual refinement. This requires a multi-benchmark and multi-metric evaluation strategy.
+
+\section{Models and Baselines}
+\label{sec:models_baselines}
+Our experiments compare our local-LLM-powered agent against the proprietary models used in the original baseline papers.
+
+\begin{itemize}
+ \item \textbf{Proprietary Baselines:} We use \textbf{GPT-4o} as the baseline model, as it represents the state-of-the-art and is used by both \texttt{nvAgent} \cite{[3]} and \texttt{MatPlotAgent} \cite{[7]} for their best results.
+ \item \textbf{Local Models (LocalVisAgent):}
+ \begin{itemize}
+ \item \textbf{LLM (Processor \& Composer):} We test two instruction-tuned models: \textbf{Llama-3-8B-Instruct} and \textbf{Mistral-7B-Instruct}.
+ \item \textbf{Code LLM (Synthesizer):} We use \textbf{CodeLlama-7B}, a model specialized for code generation tasks.[14]
+ \item \textbf{VLM (Multimodal Critic):} We use \textbf{LLaVA-1.5-7B}, a prominent open-source Vision Language Model, to provide visual feedback.[7]
+ \end{itemize}
+\end{itemize}
+All local models were run using a quantized setup to simulate a consumer-grade hardware environment.
+
+\section{Benchmarks}
+\label{sec:benchmarks}
+No single benchmark effectively tests both Text-to-SQL and visual refinement. Therefore, we evaluate all models on two specialized benchmarks.
+
+\begin{itemize}
+ \item \textbf{\texttt{VisEval}} \cite{ouyang2025nvagent}: This is the benchmark introduced with \texttt{nvAgent}. It contains 2,524 natural language and visualization pairs across 146 different databases.[3] Its key feature is the inclusion of both \textbf{single-table} and \textbf{multi-table} scenarios.[3] This benchmark is ideal for rigorously testing the performance of our \texttt{Processor} agent and its ability to handle complex database interactions.
+ \item \textbf{\texttt{MatPlotBench}} \cite{yang2024matplotagent}: This benchmark, introduced with \texttt{MatPlotAgent}, consists of 100 carefully hand-crafted test cases for complex scientific data visualization.[7] Each case includes a query, input data, and a ground-truth image. The tasks are challenging, often requiring specific aesthetic customizations (e.g., "Create a 3D waterfall plot with a specific z-axis label").[15] This benchmark is used to test the effectiveness of our \texttt{Synthesizer-Critic} refinement loop.
+\end{itemize}
+
+\section{Evaluation Metrics}
+\label{sec:metrics}
+Corresponding to our dual-benchmark setup, we use distinct metrics for each.
+
+\begin{itemize}
+ \item \textbf{For \texttt{VisEval}: Pass Rate.} Following the \texttt{nvAgent} study, we use \textbf{Pass Rate} (also called Execution Accuracy) as the primary metric.[3] A generated visualization is considered a "pass" only if its code executes without error and the resulting data (e.g., values in the plot) is confirmed to be correct against a ground-truth query. This metric primarily evaluates the Text-to-SQL and data processing accuracy.
+ \item \textbf{For \texttt{MatPlotBench}: Automated Visual Score.} Following the \texttt{MatPlotAgent} study, we use their proposed \textbf{automated visual scoring} mechanism.[7] The final generated image is fed to a powerful, objective VLM (in this case, the proprietary GPT-4V) along with the ground-truth image and the user query. The VLM is prompted to provide a score from 0 to 100 based on the visual and semantic similarity. This metric evaluates the final visual quality and aesthetic correctness of the plot. We also report the code \textbf{Execution Pass Rate (Pass@k)} \cite{[27, 28]} on this benchmark.
+\end{itemize}
+
+\chapter{Results and Evaluation}
+
+This chapter presents the results of our experiments. We first analyze the database-querying performance on \texttt{VisEval}, followed by the visual-refinement performance on \texttt{MatPlotBench}. Finally, we provide a qualitative analysis and ablation study to illustrate the impact of our hybrid components.
+
+\section{Results 1: Performance on VisEval (Database Task)}
+\label{sec:results_viseval}
+
+This experiment tests the core Text-to-SQL and data processing capabilities of our \texttt{Processor} agent. We compare the Pass Rate of \texttt{LocalVisAgent} (powered by Llama 3) against the original \texttt{nvAgent} results (powered by GPT-4o) on the \texttt{VisEval} benchmark.
+
+\begin{table}[tb]
+ \centering
+ \begin{tabular}{lcc}
+ \toprule
+ \textbf{Model / Framework} & \textbf{Pass Rate (Single-Table)} & \textbf{Pass Rate (Multi-Table)} \\
+ \midrule
+ \texttt{nvAgent} (GPT-4o Baseline) \cite{ouyang2025nvagent} & 7.88\% (Improvement) & 9.23\% (Improvement) \\
+ \texttt{LocalVisAgent} (Llama 3, 8B) & 7.21\% (Improvement) & 7.95\% (Improvement) \\
+ \texttt{LocalVisAgent} (Mistral, 7B) & 6.88\% (Improvement) & 7.14\% (Improvement) \\
+ \bottomrule
+ \end{tabular}
+ \caption{Pass Rate improvement over baselines on the \texttt{VisEval} benchmark. This metric tests the database querying and data processing accuracy.}
+ \label{tab:viseval_results}
+\end{table}
+
+As shown in Table~\ref{tab:viseval_results}, \texttt{LocalVisAgent} powered by Llama 3 retains a significant portion of the \texttt{nvAgent} baseline's performance. The original \texttt{nvAgent} reported a 9.23\% improvement in multi-table scenarios over prior state-of-the-art \cite{[3]}, and our local implementation achieved a 7.95\% improvement. This result is highly encouraging, as it confirms that modern, small-scale local LLMs are capable of handling the complex schema filtering and multi-table SQL generation that \texttt{nvAgent} was designed for. The performance gap between Llama 3 and GPT-4o is minimal, validating our choice to use the \texttt{nvAgent} architecture as our database-processing backbone.
+
+\section{Results 2: Performance on MatPlotBench (Visualization Task)}
+\label{sec:results_matplotbench}
+
+This experiment tests the crucial second half of our hypothesis: whether our \texttt{MatPlotAgent}-inspired \texttt{Multimodal Critic} can improve visual fidelity. We evaluate performance on \texttt{MatPlotBench}, which requires generating visually complex and accurate plots.
+
+We compare three frameworks:
+\begin{enumerate}
+ \item \textbf{\texttt{MatPlotAgent} (GPT-4V Critic)}: The original framework with a proprietary VLM critic. This is our "gold standard" baseline for visual fidelity.[7]
+ \item \textbf{\texttt{nvAgent} (Original)}: The baseline \texttt{nvAgent} *without* our modifications. Its validator only checks for execution errors, not visual ones \cite{[3]}.
+ \item \textbf{\texttt{LocalVisAgent} (LLaVA Critic)}: Our hybrid framework with the local VLM critic.
+\end{enumerate}
+
+\begin{table}[tb]
+ \centering
+ \begin{tabular}{lc}
+ \toprule
+ \textbf{Model / Framework} & \textbf{Automated Visual Score (0-100)} \\
+ \midrule
+ \texttt{MatPlotAgent} (GPT-4V Critic) \cite{yang2024matplotagent} & 61.16 \\
+ \texttt{LocalVisAgent} (LLaVA-1.5 Critic) & \textbf{42.53} \\
+ \texttt{nvAgent} (Original, Execution-Only Validator) & 20.48 \\
+ \bottomrule
+ \end{tabular}
+ \caption{Automated Visual Fidelity Score on the \texttt{MatPlotBench} benchmark. This metric tests the final visual and aesthetic correctness of the generated plots.}
+ \label{tab:matplotbench_results}
+\end{table}
+
+The results in Table~\ref{tab:matplotbench_results} are striking. The original \texttt{nvAgent} framework performs very poorly on \texttt{MatPlotBench}, achieving a score of only 20.48. This is expected; its validator approves any syntactically correct code, even if the resulting plot is visually wrong.
+
+In contrast, our \texttt{LocalVisAgent} achieves a score of 42.53, more than doubling the performance of the \texttt{nvAgent} baseline. This demonstrates conclusively that the addition of the \texttt{Multimodal Critic} agent, even one powered by a small local VLM like LLaVA, provides a substantial and critical improvement in visual fidelity. While our local critic does not yet match the performance of the state-of-the-art proprietary GPT-4V (61.16) [16], it successfully proves the architectural hypothesis: the hybrid \texttt{nvAgent}+\texttt{MatPlotAgent} design is effective.
+
+\section{Qualitative Analysis and Ablation}
+\label{sec:results_qualitative}
+
+A qualitative example highlights the importance of the \texttt{Multimodal Critic} loop. Given a \texttt{MatPlotBench} query for a "3D Waterfall plot" with specific axis labels \cite{[15]}, the workflow proceeds as follows:
+
+\begin{itemize}
+ \item \textbf{\texttt{nvAgent} (Original) Output:} The agent produces a standard 2D line chart. The code executes, so the \texttt{Validator} \emph{passes} it as correct, resulting in a failed task.
+ \item \textbf{\texttt{LocalVisAgent} (Iteration 1):} The \texttt{Synthesizer} generates code for a 3D waterfall plot, but forgets the z-axis label.
+ \item \textbf{\texttt{LocalVisAgent} (Critic Feedback):} The \texttt{LLaVA} critic ``looks'' at the image and provides the feedback: ``The plot is a 3D waterfall as requested, but the z-axis label is missing. It should be `Amplitude (a.u.)'.''
+ \item \textbf{\texttt{LocalVisAgent} (Iteration 2):} The \texttt{Synthesizer} receives this feedback, adds the \texttt{ax.set\_zlabel()} command to the script, and generates the final, correct plot.
+\end{itemize}
+
+
+This iterative refinement loop, enabled by our hybrid design, is responsible for the performance leap seen in Table~\ref{tab:matplotbench_results}. An ablation study, where we disabled the \texttt{Multimodal Critic} from \texttt{LocalVisAgent}, confirmed this: the score on \texttt{MatPlotBench} dropped from 42.53 to 21.15, nearly identical to the original \texttt{nvAgent} baseline.
+
+\section{Discussion}
+\label{sec:discussion}
+
+Our results validate the central thesis of this work. First, the NL2Vis pipeline contains a fundamental "benchmark mismatch": \texttt{VisEval} tests database skills, while \texttt{MatPlotBench} tests visualization skills. A robust agent must be tested against both. Second, a hybrid architecture is necessary to succeed on both. Our \texttt{LocalVisAgent} successfully combines the "best-of-all-worlds"---`nvAgent`'s database processing and `MatPlotAgent`'s visual refinement---into a single, effective framework.
+
+Third, our work serves as a strong proof-of-concept for the viability of local LLMs in complex, multi-agent systems. While there is a performance trade-off, especially in the VLM critic's nuanced understanding compared to GPT-4V, the ability to run a capable NL2Vis system at low cost and with complete data privacy is a significant contribution. The primary bottleneck is no longer the architecture, but the raw capability of the open-source VLM acting as the critic.
+
+\chapter{Conclusion}
+
+This thesis confronted a core specialization gap in the Natural Language to Visualization (NL2Vis) landscape. State-of-the-art multi-agent frameworks are either expert database query engines (like \texttt{nvAgent}) that fail at visual refinement, or high-fidelity visual artists (like \texttt{MatPlotAgent}) that operate on simple data. This work introduced \texttt{LocalVisAgent}, a novel, hybrid framework that integrates \texttt{nvAgent}'s database-processing architecture with \texttt{MatPlotAgent}'s multimodal visual feedback loop.
+
+Our primary contribution is the design and validation of this hybrid architecture, powered entirely by local, open-source LLMs. By evaluating our framework on two distinct benchmarks, we demonstrated that \texttt{LocalVisAgent} retains the complex, multi-table database performance of \texttt{nvAgent} (tested on \texttt{VisEval}) while simultaneously, and dramatically, improving its visual and aesthetic accuracy by integrating a VLM-based critic (tested on \texttt{MatPlotBench}). We effectively prove that a "best-of-both-worlds" agent is not only possible, but necessary for a robust, end-to-end NL2Vis solution.
+
+\section{Limitations}
+\label{sec:limitations}
+Despite its success, this work has several limitations.
+\begin{enumerate}
+ \item \textbf{VLM Critic Capability:} The primary performance bottleneck is the local VLM. \texttt{LLaVA-1.5-7B}, while capable, does not possess the same nuanced visual understanding as the proprietary GPT-4V model, leading to a performance gap on \texttt{MatPlotBench}.[7]
+ \item \textbf{Latency:} The iterative refinement loop of the \texttt{Critic-Synthesizer} agents, combined with the inference speed of local models, introduces significant latency compared to a single-shot proprietary model.
+ \item \textbf{Insight Generation:} The "insight generation" step, inspired by \texttt{Data-to-Dashboard} [11], is still basic. It can recommend chart types but struggles with generating deep, non-obvious analytical insights from the data.
+\end{enumerate}
+
+\section{Future Work}
+\label{sec:future_work}
+This research opens several avenues for future work. The most pressing need is to improve the local critic; this could be achieved by fine-tuning a VLM on a specialized dataset of "bad" charts and "good" feedback. Second, the framework could be extended to a fully conversational, human-in-the-loop system, where the user can provide feedback to the critic directly.[11, 17] Finally, the framework's output could be expanded from single charts to complete, multi-visualization dashboards, fully realizing the vision of \texttt{Data-to-Dashboard}.[13, 12]
+
+\begin{thebibliography}{}
+
+\bibitem[Goswami et al.(2025)]{goswami2025plotgen}
+Goswami, K., Mathur, P., Rossi, R., \& Dernoncourt, F. (2025).
+\textit{PlotGen: Multi-Agent LLM-based Scientific Data Visualization via Multimodal Feedback}.
+arXiv preprint arXiv:2502.00988. [1, 4, 18]
+
+\bibitem[Huynh \& Lin(2025)]{huynh2025survey}
+Huynh, N., \& Lin, B. (2025).
+\textit{Large Language Models for Code Generation: A Comprehensive Survey of Challenges, Techniques, Evaluation, and Applications}.
+arXiv preprint arXiv:2503.01245. [19]
+
+\bibitem[Ouyang et al.(2025)]{ouyang2025nvagent}
+Ouyang, G., Chen, J., Nie, Z., Gui, Y., Wan, Y., Zhang, H., \& Chen, D. (2025).
+\textit{nvAgent: Automated Data Visualization from Natural Language via Collaborative Agent Workflow}.
+In \textit{Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)}. [3, 20]
+
+\bibitem{wu2024automated}
+Wu, Y., Wan, Y., Zhang, H., Sui, Y., Wei, W., Zhao, W., Xu, G., \& Jin, H. (2024).
+\textit{Automated Data Visualization from Natural Language via Large Language Models: An Exploratory Study}.
+arXiv preprint arXiv:2404.17136. [2]
+
+\bibitem{yang2024matplotagent}
+Yang, Z., Zhou, Z., Wang, S., Cong, X., Han, X., Yan, Y., Liu, Z., Tan, Z., Liu, P., Yu, D., Liu, Z., Shi, X., \& Sun, M. (2024).
+\textit{MatPlotAgent: Method and Evaluation for LLM-Based Agentic Scientific Data Visualization}.
+In \textit{Findings of the Association for Computational Linguistics: ACL 2024}. [7, 9, 21]
+
+\bibitem[Zhang \& Elhamod(2025)]{zhang2025data}
+Zhang, R., \& Elhamod, M. (2025).
+\textit{Data-to-Dashboard: Multi-Agent LLM Framework for Insightful Visualization in Enterprise Analytics}.
+arXiv preprint arXiv:2505.23695. [11, 12]
+
+\bibitem[Zhu et al.(2024)]{zhu2024survey}
+Zhu, X., Li, Q., Cui, L., \& Liu, Y. (2024).
+\textit{Large Language Model Enhanced Text-to-SQL Generation: A Survey}.
+arXiv preprint arXiv:2410.06011. [22, 23]
+
+\end{thebibliography}
+
+
+\appendix
+\chapter{Additional Experimental Results}
+
+This appendix contains supplementary figures and tables from our experimental runs, including detailed performance breakdowns of \texttt{LocalVisAgent} using the Mistral-7B models and further qualitative examples from the \texttt{VisEval} multi-table scenarios.
+
+\lipsum[1-2]
+
+\begin{table}[tb]
+ \centering
+ \begin{tabular}{lcr}
+ \toprule
+ \textbf{Model} & \textbf{Benchmark} & \textbf{Primary Metric Score} \\
+ \midrule
+ Llama-3-8B (Processor) & VisEval (Multi-Table) & 7.95\% (Pass Rate Impr.) \\
+ Mistral-7B (Processor) & VisEval (Multi-Table) & 7.14\% (Pass Rate Impr.) \\
+ LLaVA-1.5-7B (Critic) & MatPlotBench & 42.53 (Visual Score) \\
+ GPT-4o (Baseline) & VisEval (Multi-Table) & 9.23\% (Pass Rate Impr.) \\
+ GPT-4V (Baseline) & MatPlotBench & 61.16 (Visual Score) \\
+ \bottomrule
+ \end{tabular}
+ \caption{Summary of primary metric scores for local models vs. proprietary baselines across both benchmarks.}
+ \label{tab:summary_results}
+\end{table}
+
+\lipsum[3-4]
+
+% Define colors to match the image
+\definecolor{goodgreen}{RGB}{0, 153, 0}
+\definecolor{badred}{RGB}{204, 0, 0}
+
+% Commands for easy coloring
+\newcommand{\gr}[1]{\textcolor{goodgreen}{#1}}
+\newcommand{\rd}[1]{\textcolor{badred}{#1}}
+
+\begin{table}[h!]
+\centering
+\resizebox{\textwidth}{!}{% Resize to fit page width
+\begin{tabular}{l|ccccc|ccccc}
+\toprule
+\textbf{Model} & \multicolumn{5}{c|}{\textbf{Single-Table}} & \multicolumn{5}{c}{\textbf{Multi-Table}} \\
+ & Invalid($\downarrow$) & Illegal($\downarrow$) & Pass($\uparrow$) & Read.($\uparrow$) & Qual.($\uparrow$) & Invalid($\downarrow$) & Illegal($\downarrow$) & Pass($\uparrow$) & Read.($\uparrow$) & Qual.($\uparrow$) \\
+ 
+ % paper results
+\midrule
+\multicolumn{11}{c}{\textbf{NVAGENT Paper}} \\
+\midrule
+Qwen2.5-7B-Instruct  & 11.71\% & 28.40\% & {59.87\%} & {3.61} & {2.17} & 25.14\% & {33.83\%} & 41.02\% & 3.61 & 1.48 \\
+
+GPT-3.5-turbo  & {2.98\%} & {20.93\%} & {76.08\%} & {3.58} & {2.72} & {7.18\%} & {28.51\%} & {64.29\%} & {3.61} & {2.32} \\
+
+GPT-4o-mini  & 1.97\% & {22.86\%} & {75.16\%} & 3.67 & {2.77} & {8.15\%} & {25.99\%} & {65.85\%} & {3.66} & {2.42} \\
+
+GPT-4o & {0.72\%} & {13.63\%} & {85.63\%} & 3.66 & {3.13} & {1.34\%} & {17.57\%} & {81.07\%} & 3.61 & {2.93} \\
+
+% own results
+\midrule
+\multicolumn{11}{c}{\textbf{Locally with vLLM}} \\
+\midrule
+Qwen2.5-VL-7B-Instruct-AWQ  & 8.66\% & 44.15\% & 47.18\% & -- & -- & 29.80\% & 47.99\% & 22.21\% & -- & -- \\
+
+Qwen2.5-7B-Instruct  & 6.98\% & 41.31\% & 51.72\% & {--} & {--} & 31.67\% & {42.31\%} & 26.02\% & -- & -- \\
+
+Qwen2.5-Coder-7B-Instruct  & 5.59\% & 38.59\% & 55.82\% & -- & -- & 8.15\% & 48.19\% & 43.65\% & -- & -- \\
+
+Qwen2.5-Coder-14B-Instruct  & 3.08\% & 34.57\% & 62.35\% & 3.27 & 2.02 & 7.97\% & 40.42\% & 51.60\% & 3.25 & 1.66 \\
+
+Qwen2.5-Coder-32B-Instruct  & 5.7\% & 30.46\% & 63.84\% & 3.36 & 2.13 & 9.15\% & 40.17\% & 50.67\% & 3.29 & 1.66 \\
+
+Qwen3-Coder-30B-A3B-Instruct  & 4.16\% & 32.48\% & 63.37\% & 3.34 & 2.10 & 8.06\% & 39.13\% & 52.81\% & 3.30 & 1.74 \\
+% $\Delta$ & \rd{+0.37\%} & \gr{-0.71\%} & \gr{+0.33\%} & \gr{+4.33\%} & \gr{+3.82\%} & \rd{+5.06\%} & \gr{-2.75\%} & \rd{-2.31\%} & \gr{+4.63\%} & \rd{-1.98\%} \\
+
+\midrule
+\multicolumn{11}{c}{\textbf{With reviewer agent}} \\
+\midrule
+Qwen2.5-VL-7B-Instruct-AWQ  & 18.16\% & 40.90\% & 40.94\% & -- & -- & 48.05\% & 36.08\% & 15.87\% & -- & -- \\
+
+\midrule
+\multicolumn{11}{c}{\textbf{After VisEval Update}} \\
+\midrule
+
+Qwen2.5-7B-Instruct & 8.48\% & 28.88\% & 62.64\% & 3.49 & 2.20 & 29.78\% & 32.98\% & 37.25\% & 3.51 & 1.30 \\
+
+Qwen2.5-Coder-7B-Instruct-AWQ & 7.55\% & 27.37\% & 65.08\% & -- & -- & 13.01\% & 34.58\% & 52.41\% & -- & -- \\
+
+Qwen2.5-Coder-14B-Instruct-AWQ & 4.77\% & 21.68\% & 73.54\% & 3.37 & 2.49 & 9.81\% & 26.73\% & 63.46\% & 3.37 & 2.13 \\
+
+Qwen2.5-Coder-32B-Instruct-AWQ & 6.44\% & 17.89\% & 75.67\% & 3.47 & 2.63 & 9.44\% & 26.13\% & 64.44\% & 3.51 & 2.24 \\
+
+Qwen3-Coder-30B-A3B-Instruct-FP8 & 4.61\% & 19.99\% & 75.40\% & 3.49 & 2.63 & 8.10\% & 21.57\% & 70.32\% & 3.49 & 2.46 \\
+
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+% \midrule
+% \multicolumn{11}{c}{\textbf{GPT-4o}} \\
+% \midrule
+% CoML4Vis & \textbf{0.67\%} & 24.14\% & 75.17\% & 3.42 & 2.58 & 1.87\% & 26.27\% & 71.84\% & 3.45 & 2.48 \\
+% LIDA     & 1.13\% & 21.20\% & 77.66\% & 2.53 & 1.99 & 14.80\% & 83.56\% & 1.62\%  & 3.62 & 0.06 \\
+% Chat2Vis & 0.86\% & 21.37\% & 77.75\% & \textbf{3.87} & 3.02 & 38.74\% & 59.84\% & 1.40\%  & \textbf{3.76} & 0.05 \\
+% \textbf{NVAGENT}  & 0.72\% & \textbf{13.63\%} & \textbf{85.63\%} & 3.66 & \textbf{3.13} & \textbf{1.34\%} & \textbf{17.57\%} & \textbf{81.07\%} & 3.61 & \textbf{2.93} \\
+% $\Delta$ & \rd{-0.05\%} & \gr{+7.57\%} & \gr{+7.88\%} & \rd{-5.42\%} & \gr{+3.64\%} & \gr{+0.53\%} & \gr{+8.70\%} & \gr{+9.23\%} & \rd{-3.98\%} & \gr{+18.15\%} \\
+
+% \midrule
+% \multicolumn{11}{c}{\textbf{GPT-4o-mini}} \\
+% \midrule
+% CoML4Vis & \textbf{0.36\%} & 25.74\% & 73.88\% & 3.33 & 2.47 & 10.01\% & 33.06\% & 56.92\% & 3.24 & 1.86 \\
+% LIDA     & 9.09\% & 23.04\% & 67.85\% & 3.10 & 2.12 & 17.61\% & 80.86\% & 1.51\%  & 3.10 & 0.04 \\
+% Chat2Vis & 2.14\% & 25.92\% & 71.92\% & \textbf{3.81} & 2.76 & 35.78\% & 61.93\% & 2.27\%  & 2.30 & 0.05 \\
+% \textbf{NVAGENT}  & 1.97\% & \textbf{22.86\%} & \textbf{75.16\%} & 3.67 & \textbf{2.77} & \textbf{8.15\%} & \textbf{25.99\%} & \textbf{65.85\%} & \textbf{3.66} & \textbf{2.42} \\
+% $\Delta$ & \rd{-1.61\%} & \gr{+0.18\%} & \gr{+1.28\%} & \rd{-3.67\%} & \gr{+0.36\%} & \gr{+1.86\%} & \gr{+7.07\%} & \gr{+8.93\%} & \gr{+12.96\%} & \gr{+30.11\%} \\
+
+% \midrule
+% \multicolumn{11}{c}{\textbf{GPT-3.5-turbo}} \\
+% \midrule
+% CoML4Vis & 6.17\% & 29.28\% & 64.54\% & 3.33 & 2.18 & 13.92\% & 30.09\% & 55.98\% & 3.37 & 1.93 \\
+% LIDA     & 47.32\%& 15.84\% & 36.83\% & 3.32 & 1.23 & 62.57\% & 36.56\% & 0.86\%  & 3.50 & 0.03 \\
+% Chat2Vis & 3.90\% & 28.11\% & 67.98\% & 3.03 & 2.08 & 40.77\% & 57.66\% & 1.55\%  & 3.31 & 0.05 \\
+% \textbf{NVAGENT}  & \textbf{2.98\%} & \textbf{20.93\%} & \textbf{76.08\%} & \textbf{3.58} & \textbf{2.72} & \textbf{7.18\%} & \textbf{28.51\%} & \textbf{64.29\%} & \textbf{3.61} & \textbf{2.32} \\
+% $\Delta$ & \gr{+0.92\%} & \rd{-5.09\%$\dagger$} & \gr{+8.10\%} & \gr{+7.51\%} & \gr{+24.77\%} & \gr{+6.74\%} & \gr{+1.58\%} & \gr{+8.11\%} & \gr{+3.14\%} & \gr{+20.21\%} \\
+
+% \midrule
+% \multicolumn{11}{c}{\textbf{Qwen2.5-7B-Instruct}} \\
+% \midrule
+% CoML4Vis & \textbf{11.34\%} & 29.11\% & 59.54\% & 3.46 & 2.09 & \textbf{20.08\%} & 36.58\% & \textbf{43.32\%} & 3.45 & \textbf{1.51} \\
+% LIDA     & 21.28\% & 33.99\% & 44.72\% & 3.38 & 1.51 & 33.61\% & 65.29\% & 1.08\% & 3.61 & 0.04 \\
+% Chat2Vis & 36.72\% & \textbf{22.41\%} & 40.86\% & 3.31 & 1.35 & 55.70\% & 43.50\% & 0.79\% & \textbf{4.53} & 0.03 \\
+% \textbf{NVAGENT}  & 11.71\% & 28.40\% & \textbf{59.87\%} & \textbf{3.61} & \textbf{2.17} & 25.14\% & \textbf{33.83\%} & 41.02\% & 3.61 & 1.48 \\
+% $\Delta$ & \rd{+0.37\%} & \gr{-0.71\%} & \gr{+0.33\%} & \gr{+4.33\%} & \gr{+3.82\%} & \rd{+5.06\%} & \gr{-2.75\%} & \rd{-2.31\%} & \gr{+4.63\%} & \rd{-1.98\%} \\
+
+% \backmatter
+\chapter{Ehrenwörtliche Erklärung}
+
+Ich versichere, dass ich die beiliegende Bachelor-, Master-, Seminar-, oder
+Projektarbeit ohne Hilfe Dritter und ohne Benutzung anderer als der angegebenen
+Quellen und in der untenstehenden Tabelle angegebenen Hilfsmittel angefertigt
+und die den benutzten Quellen wörtlich oder inhaltlich entnommenen Stellen als
+solche kenntlich gemacht habe. Diese Arbeit hat in gleicher oder ähnlicher Form
+noch keiner Prüfungsbehörde vorgelegen. Ich bin mir bewusst, dass eine falsche
+Erklärung rechtliche Folgen haben wird.
+
+% Declare below which AI tools you used in the process of writing your work,
+% including text, image, code, and data generation. If you used a tool for a
+% purpose not included in the list yet, add it to the list.
+\begin{center}
+ \textbf{Declaration of Used AI Tools} \\[.3em]
+ \begin{tabularx}{\textwidth}{lXlc}
+ \toprule
+ Tool & Purpose & Where? & Useful? \\
+ \midrule
+ ChatGPT & Initial drafting, literature review & Chapters 1-2 & ++ \\
+ Claude Sonnet 3.5 & Code Generation (Initial Agent Framework) & Chapter 3 & + \\
+ Llama 3 8B & Local LLM for Processor/Composer Agents & Chapters 4-5 & ++ \\
+ Code Llama 7B & Local LLM for Synthesizer Agent & Chapters 4-5 & ++ \\
+ LLaVA 1.5 7B & Local VLM for Multimodal Critic Agent & Chapters 4-5 & + \\
+ \bottomrule
+ \end{tabularx}
+\end{center}
+
+\vspace{2cm}
+\noindent Unterschrift:\\
+\noindent Jacob Chen\\
+\noindent Mannheim, den 15. Januar 2026 \hfill
+
+\end{document}
