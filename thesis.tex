@@ -57,67 +57,128 @@ This thesis investigates the development of autonomous, multi-agent systems for 
 \chapter{Introduction}
 \label{ch:intro}
 
-The ability to extract insights from data is a fundamental driver of progress in science and industry. However, accessing this data has historically required specialized technical knowledge, creating a bottleneck between domain experts and the data itself \cite{wu2024automated}. The field of Natural Language to Visualization (NL2Vis) seeks to dismantle this barrier by enabling users to generate complex data visualizations through simple, conversational instructions.[2] This democratization of data analysis, powered by the rise of Large Language Models (LLMs), promises to make data exploration intuitive and accessible to all \cite{wu2024automated}.
+The ability to extract insights from data is a central driver of progress in science, policy, and industry. In practice, however, access to that insight is often limited by technical barriers: many domain experts can interpret results, but cannot easily produce them from raw relational data \cite{wu2024automated}. Natural Language to Visualization (NL2Vis) aims to reduce this gap by allowing users to request visualizations in everyday language rather than through manual query writing or code authoring \cite{maddigan2023chat2vis}.
 
-An effective NL2Vis system must master a complex, end-to-end pipeline that bridges natural language, structured databases, and visualization code. This process inherently involves two distinct and challenging sub-problems. First, the system must perform robust \textbf{Text-to-SQL} translation, accurately interpreting user intent to query complex, multi-table relational databases.[3, 4] An error at this stage---retrieving the wrong data---renders the final visualization incorrect, regardless of its visual quality. Second, the system must execute \textbf{Text-to-Code} generation, synthesizing the retrieved data into executable code (e.g., Python) to produce a chart that is not only syntactically correct but also visually and aesthetically aligned with the user's request \cite{yang2024matplotagent,huynh2025survey}.
+An effective NL2Vis system must solve two tightly coupled sub-problems. First, it must perform robust \textbf{Text-to-SQL} translation, mapping user intent to correct queries over often complex, multi-table schemas \cite{zhu2024survey,wu2024automated}. Second, it must perform \textbf{Text-to-Code} generation, converting retrieved data into executable visualization code (for example in Python) that is both syntactically valid and semantically aligned with the user's request \cite{huynh2025survey}. Errors in either stage can invalidate the final chart.
 
-Recent advancements have seen a shift toward LLM-based Multi-Agent (LLM-MA) systems, which apply a "divide-and-conquer" strategy to this pipeline.[5] However, a review of state-of-the-art frameworks reveals a significant specialization gap. On one hand, database-centric frameworks like \texttt{nvAgent} \cite{ouyang2025nvagent} employ sophisticated agentic workflows to excel at processing complex, multi-table database queries, but their validation mechanisms are limited to checking for code execution errors, often missing visual or aesthetic flaws.[3, 6] On the other hand, visualization-centric frameworks such as \texttt{MatPlotAgent} \cite{yang2024matplotagent} and \texttt{PlotGen} \cite{goswami2025plotgen} have pioneered multimodal feedback loops, using Vision Language Models (VLMs) to "look" at generated charts and iteratively correct visual errors. These systems achieve high visual fidelity but are typically demonstrated on simpler, pre-processed single-file datasets, circumventing the initial challenge of complex database querying.[1, 7]
+Recent work has increasingly converged on LLM-based multi-agent systems for this pipeline \cite{li2024mas}. A representative example is \texttt{nvAgent} \cite{ouyang2025nvagent}, which decomposes the task into a Processor, Composer, and Validator and reports strong performance on \texttt{VisEval} \cite{chen2025viseval}. Yet this progress comes with a practical trade-off: leading systems still depend on proprietary models such as GPT-4o. For organizations handling sensitive data, this dependency is often infeasible.
 
-This thesis addresses this critical gap by proposing and implementing \emph{LocalVisAgent}, a hybrid multi-agent framework. Our work is founded on two key hypotheses:
+\section{Research Motivation}
+
+This thesis investigates a concrete practical question:
+\begin{quote}
+\emph{How far can locally-run, open-source LLMs take an \texttt{nvAgent}-style multi-agent NL2Vis system on realistic benchmark tasks?}
+\end{quote}
+
+The motivation is twofold. First, privacy and governance constraints in enterprise and public-sector settings often prohibit sending schema context and query content to third-party APIs. Second, recent progress in open-source and code-specialized LLMs suggests that the performance gap to proprietary models may now be narrow enough to justify local deployment in many settings.
+
+\section{Approach and Scope}
+
+We use \texttt{nvAgent}'s architecture as the baseline and run a systematic model sweep with locally served open-source LLMs. The evaluated models range from 7B instruction-tuned baselines (Qwen2.5-7B) to code-specialized variants (Qwen2.5-Coder 7B, 14B, and 32B) and a Mixture-of-Experts coder model (Qwen3-Coder-30B-A3B). All models are served through vLLM \cite{kwon2023vllm} and quantized with AWQ where appropriate \cite{lin2024awq}. Evaluation is conducted on \texttt{VisEval} \cite{chen2025viseval}, including both single-table and multi-table settings.
+
+Beyond model scaling, we test two targeted optimizations: (i) a visual reviewer agent that critiques rendered plots, and (ii) prompt-level improvements to the Composer to strengthen alignment with the original user intent. The analysis shows that the reviewer does not improve pass rates in this setup; most failures are caused by incorrect data integration upstream, not by chart rendering quality.
+
+\section{Contributions}
+
+The main contributions of this thesis are:
 \begin{enumerate}
-  \item A hybrid architecture, combining the database-processing strengths of \texttt{nvAgent} with the visual-refinement mechanisms of \texttt{MatPlotAgent}, can achieve state-of-the-art performance across the *entire* NL2Vis pipeline.
-  \item This entire agentic system can be effectively powered by open-source, locally-run LLMs, providing a cost-effective and privacy-preserving alternative to the proprietary models (e.g., GPT-4o) currently dominating the field \cite{yang2024matplotagent}.
+  \item A systematic empirical evaluation of open-source LLMs of different sizes and specializations within an \texttt{nvAgent}-style multi-agent NL2Vis pipeline.
+  \item A failure-mode analysis showing that data-integration errors, rather than code-generation errors, are the dominant bottleneck for smaller local models.
+  \item A practical deployment blueprint for privacy-preserving NL2Vis systems, including clear trade-offs between model capability, cost, and data-governance constraints.
 \end{enumerate}
-
-To achieve this, we re-implement the core architecture of \texttt{nvAgent} and replace its simple code validator with a new \emph{Multimodal Critic} agent inspired by \texttt{MatPlotAgent}.[7] This critic uses a local VLM (e.g., LLaVA) to provide iterative visual feedback to a local code generation agent (e.g., Code Llama). To validate our hybrid approach, we evaluate \texttt{LocalVisAgent} on two distinct benchmarks, each targeting a different half of the NL2Vis pipeline: the \texttt{VisEval} benchmark \cite{ouyang2025nvagent} to measure performance on multi-table database querying, and the \texttt{MatPlotBench} benchmark \cite{yang2024matplotagent} to measure final visual and aesthetic accuracy.
-
-Our results confirm that \texttt{LocalVisAgent} successfully retains the strong database-querying capabilities of its \texttt{nvAgent} baseline while demonstrating a dramatic improvement in visual fidelity on \texttt{MatPlotBench}. This work presents a novel, comprehensive framework and provides a blueprint for building robust, low-cost, and private NL2Vis systems.
 
 \chapter{Literature Review}
 \label{ch:related_work}
 
-The NL2Vis task has evolved from simple rule-based systems to sophisticated, reasoning-based multi-agent frameworks. This evolution is characterized by a "divide-and-conquer" approach, where the complex end-to-end pipeline is decomposed into specialized sub-tasks handled by distinct agents \cite{ouyang2025nvagent,yang2024matplotagent}. This review analyzes the current landscape by categorizing frameworks based on their primary architectural focus: database interaction, visual refinement, or holistic insight generation.
+Natural Language to Visualization (NL2Vis) sits at the intersection of natural language processing, data visualization, and human--computer interaction. At its core, the task asks a system to take a free-form query in everyday language and produce a chart or other visual representation from structured, relational data---without requiring the user to write code or formulate explicit queries \cite{wu2024automated}. The appeal is clear: it democratizes data exploration, allowing business analysts, policymakers, and domain experts to interact with complex databases on their own terms. Yet the technical challenge is equally significant: the system must simultaneously resolve what the user means, retrieve the right data, and render an appropriate visualization---a pipeline that compounds errors across its stages.
 
-\section{Preliminaries}
-\label{sec:preliminaries}
+This chapter reviews the methodological foundations and current state of the art in NL2Vis, with particular attention to the challenges and design decisions most relevant to this thesis. Our focus is on systems that use Large Language Models (LLMs) in multi-agent configurations, the practical constraints of deploying such systems with sensitive organizational data, and the benchmarks used to evaluate them. We structure the review around five themes: the evolution of NL2Vis methods, the emergence of multi-agent frameworks, the technical and practical challenges of real-world deployment, the viability of open-source local LLMs, and the benchmark landscape.
 
-The modern NL2Vis pipeline is best understood as a sequence of two major tasks:
-\begin{enumerate}
-  \item \textbf{Text-to-SQL}: The translation of a user's natural language question into an executable SQL query that retrieves the correct data from a relational database.[4] This task is fraught with challenges, including schema linking (mapping phrases like "top earners" to `employees.salary`) and handling complex, multi-table joins \cite{zhu2024survey}.
-  \item \textbf{Text-to-Code}: The synthesis of the retrieved data into executable code (e.g., Python, using libraries like Matplotlib or Plotly) to render a visual artifact \cite{huynh2025survey}. This task's challenges include generating syntactically correct code for specific libraries and accurately mapping data to aesthetic properties (e.g., axes, colors, labels) to fulfill the user's intent \cite{huynh2025survey}.
-\end{enumerate}
-LLM-based Multi-Agent (LLM-MA) systems are the current state-of-the-art paradigm for managing this pipeline, as they allow for specialized agents to collaborate and handle each sub-task independently \cite{ouyang2025nvagent,yang2024matplotagent}.
+\section{The NL2Vis Pipeline and What Makes a Good Visualization}
+\label{sec:nlvis_pipeline}
 
-\section{Related Work on Database-Centric Frameworks}
-\label{sec:related_work_A}
+The NL2Vis pipeline can be understood as the composition of two distinct sub-tasks. The first is \textbf{Text-to-SQL}: translating a natural language query into a SQL statement that retrieves the right data from a relational database \cite{zhu2024survey}. This sub-task presents significant challenges of its own---the system must link tokens in the user's query to columns and tables in the schema, handle joins across multiple tables, and correctly infer aggregations and filters that the user has not made explicit. The second sub-task is \textbf{Text-to-Code}: taking the retrieved data and generating executable code---typically Python with Matplotlib or Plotly---that renders an appropriate chart \cite{huynh2025survey}. Errors at either stage compound: incorrect data retrieval produces a visually polished but semantically wrong chart, while faulty code generation fails execution entirely.
 
-A critical bottleneck in NL2Vis is the initial database interaction. Frameworks in this category prioritize solving the Text-to-SQL problem, especially in complex, multi-table environments.
+A good visualization is more than one that runs without error. It must faithfully reflect the user's analytical intent: the correct chart type, appropriate axis mappings, accurate aggregations, and readable labels \cite{maddigan2023chat2vis}. Earlier work in the field focused heavily on syntactic correctness---whether the output code compiles and renders---but the community has increasingly recognized that a chart can be syntactically valid and semantically wrong at the same time. A bar chart that displays aggregated sales by the wrong grouping dimension, or a line chart that inverts its temporal axis, is technically valid but analytically misleading. Defining and measuring visual quality rigorously remains an open problem, and evaluation methodology is itself an active area of research, as we discuss in Section~\ref{sec:benchmarks}.
 
-The most prominent example is \textbf{\texttt{nvAgent}} \cite{ouyang2025nvagent}. Its architecture is a collaborative workflow of three agents:
-\begin{itemize}
-  \item \textbf{Processor Agent}: This agent acts as the database expert. It receives the user query and database schema, performs schema filtering to remove irrelevant tables, and classifies the query's complexity (e.g., single-table vs. multi-table).[3, 6]
-  \item \textbf{Composer Agent}: This agent acts as the planner. Based on the processor's output, it generates a step-by-step plan and a Visual Query Language (VQL) representation, which is an abstract blueprint for the visualization.[6]
-  \item \textbf{Validator Agent}: This agent translates the VQL into executable Python code and runs it. If the code executes successfully, the process ends. If it fails (e.g., a syntax error), the error message is fed back to the Composer for iteration.[3]
-\end{itemize}
-The primary strength of \texttt{nvAgent} lies in its \texttt{Processor} agent, which robustly handles complex data retrieval. Its main limitation, however, is its \texttt{Validator}: it can only catch code execution errors, not visual or semantic ones. A chart can be syntactically perfect but visually wrong (e.g., incorrect labels, wrong chart type), and the \texttt{nvAgent} validator would approve it. \texttt{nvAgent} was evaluated on the \textbf{\texttt{VisEval}} benchmark, which was co-developed to test these single- and multi-table querying capabilities.[3, 8]
+\section{From Rule-Based Systems to Large Language Models}
+\label{sec:evolution}
 
-\section{Related Work on Visualization-Centric Frameworks}
+Early NL2Vis research relied on hand-crafted grammars and semantic parsers. These systems would parse a query into structured slots---chart type, data columns, aggregation function---using carefully designed linguistic rules. They were interpretable and predictable within their designed scope, but brittleness under paraphrase and an inability to generalize beyond the rules' coverage severely limited their reach.
 
-This category includes frameworks that focus on the second half of the pipeline: achieving high-fidelity visual and aesthetic correctness, often by assuming the data is already clean and available (e.g., in a single CSV file).
+Neural sequence-to-sequence models changed the picture considerably. Treating NL2Vis as a machine translation problem---translating natural language into a visualization specification language---allowed systems like ncNet to learn mappings end-to-end from paired examples \cite{luo2022ncnet}. ncNet introduced Transformer-based seq2seq models with visualization-aware training strategies, including attention forcing and chart-template conditioning, and demonstrated clear improvements over rule-based baselines. These models relied on the nvBench dataset \cite{luo2021nvbench}, which provided the first large-scale paired corpus for the task and will be discussed in more detail in Section~\ref{sec:benchmarks}.
 
-\textbf{\texttt{MatPlotAgent}} \cite{yang2024matplotagent} introduced a groundbreaking \emph{visual feedback mechanism}.[7] Its three-module architecture (query understanding, code generation, and visual feedback) uses a multimodal LLM (VLM) as a critic. After code is generated and executed, the resulting image is fed to a VLM (like GPT-4V) along with the original request. The VLM then "looks" at the chart and provides natural language feedback (e.g., "The title is incorrect," "The bar colors should be blue"), which prompts the code agent to revise its script.[7, 9] This allows the system to correct a wide range of visual and semantic errors. This framework was introduced with \textbf{\texttt{MatPlotBench}}, a high-quality benchmark of 100 complex scientific visualization tasks.[7]
+The rise of large language models shifted the paradigm again, and decisively. Rather than training specialized models on NL2Vis-specific data, recent work has exploited the strong code generation and instruction-following capabilities of LLMs through prompting and in-context learning. Chat2Vis demonstrated that prompting GPT-3 and ChatGPT could produce usable visualizations from natural language queries with minimal task-specific engineering \cite{maddigan2023chat2vis}. Prompt4Vis extended this idea by combining example mining---retrieving semantically similar examples from a corpus---with schema filtering to reduce irrelevant context, achieving substantial gains through better in-context prompt construction \cite{li2025prompt4vis}. LIDA proposed a grammar-agnostic pipeline driven entirely by LLMs, capable of producing visualizations in multiple output languages without being tied to any particular chart specification format \cite{dibia2023lida}. Together, these works established that modern LLMs, when appropriately prompted, can handle the reasoning demanded by NL2Vis without task-specific fine-tuning---at least in the single-table, clean-data regime.
 
-Similarly, \textbf{\texttt{PlotGen}} \cite{goswami2025plotgen} employs a multi-agent framework with an even more granular feedback system. It uses three distinct feedback agents---a Numeric Feedback Agent (verifies data values), a Lexical Feedback Agent (checks labels and titles), and a Visual Feedback Agent (checks chart type and aesthetics)---to iteratively debug the visualization via self-reflection.[1, 10] \texttt{PlotGen} also uses \texttt{MatPlotBench} for its evaluation, demonstrating high performance in visual accuracy.[1]
+The methodological shift toward LLMs has been substantial. The emergence of accessible LLM APIs in 2022 and 2023 catalyzed a rapid expansion of LLM-based approaches to NL2Vis, with systems increasingly relying on prompting and in-context learning rather than task-specific model training, a trend documented across multiple recent empirical studies \cite{wu2024automated,maddigan2023chat2vis,li2025prompt4vis}.
 
-\section{Related Work on Holistic Insight-Driven Frameworks}
+\section{Multi-Agent LLM Frameworks for NL2Vis}
+\label{sec:multi_agent}
 
-A third category of frameworks shifts the goal from merely *fulfilling* a user's request to *proactively discovering* insights, simulating the workflow of a business analyst.
+A single LLM handling the entire NL2Vis pipeline faces a fundamental tension: the skills required to process a complex multi-table SQL query are not the same as those needed to generate polished Matplotlib code, or to identify a visual error in a rendered chart. This observation has motivated a divide-and-conquer approach, where a multi-agent system assigns each stage of the pipeline to a specialized agent. LLM-based multi-agent frameworks have demonstrated strong performance in complex software engineering tasks generally \cite{li2024mas}, and the NL2Vis community has adopted this paradigm quickly.
 
-\textbf{\texttt{Data-to-Dashboard}} \cite{zhang2025data} exemplifies this approach. Its objective is to automate the entire "data-to-dashboard" pipeline.[11, 12] It features a modular pipeline of agents, including a \texttt{Data Profiler}, a \texttt{Domain Detector} to understand the data's business context, and an \texttt{Analysis Generator} that proposes multiple "insight statements" and visualization types *before* any code is written.[11, 13] The system then uses \texttt{Evaluator} and \texttt{Self-Reflector} agents to refine the *analytical quality* of the insights, not just the visual correctness of the chart.[13] This represents a conceptual shift from visualization generation to insight generation.
+\textbf{\texttt{nvAgent}} \cite{ouyang2025nvagent} is the most directly relevant prior work for this thesis. It organizes the NL2Vis pipeline around three collaborating agents. The \emph{Processor} agent handles the database interaction: given a user query and a database schema, it filters irrelevant tables and columns, classifies query complexity as single-table or multi-table, and generates an executable SQL query. This schema-filtering step is critical---it reduces the context size passed to downstream agents and helps the system focus on only the relevant portions of the schema. The \emph{Composer} agent takes the Processor's output and generates a high-level visualization plan in a structured Visual Query Language (VQL) format, specifying chart type, axis mappings, and groupings before any code is written. The \emph{Validator} agent translates this plan into executable Python code and runs it; if execution fails, the error message is fed back to the Composer for correction. Evaluated on the co-developed VisEval benchmark \cite{chen2025viseval}, nvAgent achieved pass rate improvements of 7.88\% on single-table and 9.23\% on multi-table queries over the best prior baseline, and maintained a roughly 20\% margin over non-agentic approaches. The multi-table strength is particularly notable, as many earlier systems struggle when a visualization requires joining data across multiple tables.
 
-\section{Summary}
+Despite this strong database performance, nvAgent's Validator has an important limitation: it only detects code execution failures. A chart that runs successfully but displays the wrong data, uses an inappropriate chart type, or has missing labels is approved without question. This gap between syntactic success and semantic correctness is a central weakness, and one that motivates the visual feedback approaches in more recent systems.
 
-The literature reveals a clear research gap: systems are either strong database query engines (\texttt{nvAgent}) or high-fidelity visual renderers (\texttt{MatPlotAgent}, \texttt{PlotGen}), but no single framework excels at both. Furthermore, all state-of-the-art systems rely on expensive, closed-source models like GPT-4o.[3, 7] This thesis proposes a hybrid framework, \texttt{LocalVisAgent}, that synthesizes these disparate strengths. We adopt the \texttt{nvAgent} architecture for its database prowess but replace its limited validator with a \texttt{MatPlotAgent}-inspired multimodal critic, all while using local, open-source LLMs to create a system that is both comprehensive and cost-effective.
+\textbf{\texttt{MatPlotAgent}} \cite{yang2024matplotagent} addressed this gap from the opposite direction, focusing on visual quality. Its architecture adds a multimodal feedback loop to the code generation pipeline: after a chart is rendered, a Vision Language Model (VLM) examines the image and provides natural language critique---noting, for example, that an axis label is missing or that the chart type does not match the request. This critique is fed back to the code generation module for iterative correction. MatPlotAgent demonstrated that even a small number of VLM-guided refinement iterations substantially improves visual fidelity on complex scientific visualization tasks.
+
+\textbf{\texttt{PlotGen}} \cite{goswami2025plotgen} pushes this feedback idea further, decomposing the visual critique into three specialized agents: a Numeric Feedback Agent that verifies data values, a Lexical Feedback Agent that checks labels and titles, and a Visual Feedback Agent that assesses chart type and layout. This granular decomposition proved effective, yielding 4--6 percentage point improvements over strong baselines on complex visualization tasks. Similarly, \citeauthor{shi2025visref} trained a VLM specifically to judge visualization quality and provide code-level repair suggestions, demonstrating that a model fine-tuned on examples of good and bad charts gives more actionable feedback than a general-purpose VLM used zero-shot \cite{shi2025visref}.
+
+These systems reveal a persistent pattern in the field: systems that excel at database querying (nvAgent) are weak at visual validation, and systems that produce high-quality visuals (MatPlotAgent, PlotGen) are typically demonstrated on pre-processed, single-file datasets that sidestep the database interaction entirely. No single framework has convincingly addressed both halves of the pipeline simultaneously. This \emph{specialization gap} is one of the core architectural problems this thesis sets out to address.
+
+\section{Open Challenges in Deploying NL2Vis Systems}
+\label{sec:challenges}
+
+Beyond the specialization gap, the NL2Vis literature identifies a range of challenges that bear directly on the design choices made in this thesis. We discuss four that are most relevant here.
+
+\subsection{Ambiguity and Intent Underspecification}
+
+Natural language queries are rarely precise. Expressions such as ``show me sales'' or ``compare regions'' leave chart type, aggregation level, and time scope entirely unspecified. Systems must either make reasonable defaults or risk producing charts that are technically correct but analytically misleading \cite{maddigan2023chat2vis}. Standard benchmarks deliberately use unambiguous prompts to facilitate reliable evaluation \cite{chen2025viseval}, which simplifies measurement but does not reflect the messiness of real-world use. This thesis inherits this scope assumption---working with well-specified queries---but acknowledges ambiguity handling as an important direction for future work. The development of benchmarks that include underspecified queries and multiple valid ground truths is an active area of discussion in the community.
+
+\subsection{Scalability and Context Constraints}
+
+Multi-agent NL2Vis systems consume substantial context window capacity. A real enterprise database may have dozens of tables and hundreds of columns; feeding the complete schema to an LLM in a single prompt is often impossible within the context limits of current models and quickly becomes expensive. Schema filtering, as implemented in nvAgent's Processor, is a practical response to this constraint \cite{ouyang2025nvagent}. At the same time, iterative feedback loops add latency with each refinement round---a meaningful cost when running locally on hardware with limited parallelism. System design for NL2Vis thus requires balancing the benefits of iterative correction against the practical costs of inference time and context consumption.
+
+\subsection{Privacy, Data Confidentiality, and the Cost of Proprietary APIs}
+\label{sec:privacy}
+
+Perhaps the most significant practical barrier for real-world NL2Vis deployment is the tension between using state-of-the-art LLMs and protecting sensitive organizational data. The strongest NL2Vis systems rely on proprietary APIs---GPT-4o in the case of nvAgent \cite{ouyang2025nvagent}, GPT-4V in MatPlotAgent \cite{yang2024matplotagent}---which require sending the user's query and relevant portions of the database schema, and sometimes sample data rows, to third-party cloud servers. For organizations working with confidential or regulated data, this is frequently untenable.
+
+Enterprise databases routinely contain information subject to strict data protection requirements. Public sector organizations---law enforcement agencies, healthcare providers, social services---handle data that may not legally or ethically be transmitted to external infrastructure. The same applies to corporate ERP systems, financial records, and customer databases. Even where external transmission is technically permitted, the financial cost scales with query volume and schema size, making API-based systems economically impractical at organizational scale. A further practical concern is reproducibility: proprietary APIs undergo silent model upgrades that can change output behavior without notice, making it difficult to audit or replicate results \cite{maddigan2023chat2vis}. Running LLMs locally eliminates all of these concerns simultaneously---no data leaves the organization's infrastructure, inference is deterministic and auditable, and cost is bounded by hardware rather than per-token pricing \cite{lin2024awq}.
+
+\subsection{Evaluation and Human-in-the-Loop Feedback}
+
+Current benchmarks assume a one-shot interaction model: a single query produces a single chart, which is scored against a ground truth. Real data exploration is rarely this clean. Users iterate---refining their query, rejecting an output and trying again, or asking follow-up questions. No widely adopted NL2Vis benchmark accommodates this kind of multi-turn interaction \cite{chen2025viseval}, and fully automating iterative human feedback for evaluation purposes remains an open problem. Within this thesis, we have explored whether an LLM can simulate the human feedback role to assess whether iterative correction can improve pass rates without requiring a human in the loop at each step.
+
+\section{Open-Source LLMs and Local Deployment}
+\label{sec:local_llms}
+
+The argument for locally-run, open-source LLMs in NL2Vis is both practical and architectural. On the practical side, running LLMs locally eliminates data transmission to third parties, reduces per-query cost to amortized hardware cost, and ensures reproducibility across experimental runs \cite{lin2024awq}. On the architectural side, smaller open-source models force a more careful allocation of roles within a multi-agent system, because no single small model can reliably handle the full pipeline in one shot.
+
+The question of whether open-source models are capable enough for NL2Vis tasks has a nuanced answer. General-purpose instruction-tuned models in the 7--14B parameter range perform meaningfully below GPT-4o on complex multi-table queries. However, domain-specialized variants change the picture substantially. Code-specialized models such as Qwen2.5-Coder are fine-tuned on large code corpora and show significantly stronger performance on code generation sub-tasks than their general-purpose counterparts of the same size \cite{wu2024automated}. As model sizes increase toward 30--32B parameters, the gap between open-source coder models and proprietary APIs narrows to the point where the privacy and cost advantages begin to outweigh the residual performance difference for many practical use cases.
+
+Efficient serving of local models is itself an engineering challenge. Loading and running a 14--32B parameter model requires careful memory management; naive inference implementations are too slow for interactive use. The vLLM serving framework addresses this through PagedAttention, an attention algorithm that borrows virtual memory and paging techniques from operating systems to achieve near-zero waste in key-value cache memory, enabling 2--4$\times$ higher throughput at the same latency compared to standard serving systems \cite{kwon2023vllm}. Weight quantization further reduces the memory footprint of large models. Activation-aware Weight Quantization (AWQ) identifies the small fraction of weights that contribute most to model outputs and protects them during quantization, achieving 4-bit compression with minimal accuracy loss \cite{lin2024awq}. Together, vLLM and AWQ make it practically feasible to serve 14--32B parameter models on a single research GPU at throughput adequate for systematic benchmarking.
+
+The role of model size in NL2Vis performance is not straightforward. Voigt et al. showed that small pre-trained language models can generate visualization specifications in real time on a CPU for simpler single-table tasks, establishing that reduced-size models can be viable for latency-sensitive deployments \cite{voigt2024plots}. Their results also highlight that raw model size is not the only factor---prompt encoding, schema representation, and output grammar structure all substantially affect performance. This observation supports the multi-agent design philosophy: by giving each agent a narrow, well-defined sub-task, the system can use smaller models more effectively than a single large model handling everything at once.
+
+\section{Evaluation Benchmarks: From nvBench to VisEval}
+\label{sec:benchmarks}
+
+Standardized benchmarks are the backbone of empirical progress in NL2Vis. The dominant benchmark for most of the field's history has been \textbf{nvBench} \cite{luo2021nvbench}, which contains over 25{,}750 paired natural language queries and Vega-Lite visualization specifications across 105 relational database domains and seven common chart types. nvBench was constructed by programmatically mapping SQL queries from the Spider text-to-SQL benchmark \cite{yu2018spider} into chart specifications, then generating corresponding natural language queries through a rule-based synthesis process. Its breadth made it the standard training and evaluation corpus across most of the systems discussed in this chapter \cite{luo2022ncnet,li2025prompt4vis,maddigan2023chat2vis}.
+
+nvBench has well-documented limitations, however. Its queries are synthetically generated and tend to be grammatically regular and fully specified---a poor match for the noisy, underspecified queries typical of real users. Its evaluation is based on Vega-Lite specification matching, so systems trained on it may fail when asked to produce Python code output. Most importantly for this thesis, nvBench does not distinguish between single-table and multi-table scenarios in its standard evaluation, making it unsuitable for measuring performance on complex database queries involving joins.
+
+\textbf{VisEval} \cite{chen2025viseval} was designed to address these gaps in the LLM era. It provides 2{,}524 natural language and visualization pairs across 146 databases, with explicit coverage of both single-table and multi-table scenarios. Its evaluation framework goes substantially beyond simple string matching. A generated visualization is assessed along multiple dimensions: \emph{validity} checks whether the code executes without error; \emph{legality} verifies whether the retrieved data values in the chart match the ground-truth SQL output, catching charts that run correctly but display wrong information; and \emph{readability} is assessed by an LLM judge evaluating label clarity, title appropriateness, and overall presentation quality. The primary metric, \emph{pass rate}, requires a visualization to pass both the validity and legality checks. This tighter definition is significant: it catches exactly the category of errors that nvAgent's original Validator misses---charts that execute successfully but are semantically wrong because they integrate the data incorrectly.
+
+VisEval was co-developed with nvAgent and has since become the standard benchmark for evaluating LLM-based multi-agent NL2Vis systems on database-querying tasks. It is the primary evaluation instrument for the experiments in this thesis. Its design constraints---unambiguous prompts, database ID provided to the system---narrow the scope relative to open-ended real-world deployment, but this precision is a strength for isolating and measuring specific capabilities in a controlled way.
+
+\section{Summary and Research Gap}
+\label{sec:gap}
+
+The survey of the field reveals three converging gaps that this thesis is positioned to address. First, there is a \emph{specialization gap}: the strongest database-querying system (nvAgent) lacks meaningful visual validation, while the strongest visual refinement systems (MatPlotAgent, PlotGen) sidestep database complexity. A system that handles both has not been demonstrated. Second, there is a \emph{proprietary dependency gap}: every state-of-the-art NL2Vis system relies on closed-source models such as GPT-4o, and the performance of open-source, locally-run models in multi-agent NL2Vis configurations has not been systematically studied. Third, there is a \emph{deployment gap}: the literature does not address the practical scenario of organizations that need NL2Vis capabilities for sensitive data that cannot leave their infrastructure.
+
+This thesis takes nvAgent's architecture as its baseline and investigates how it performs when the proprietary LLM backbone is replaced with open-source models of varying size, specialization, and quantization level, all served locally via vLLM. We evaluate these configurations on VisEval, use the results to identify where smaller models fail, and explore targeted improvements to the agent design. The goal is not simply to match GPT-4o---that bar may require substantially larger models than those studied here---but to characterize the frontier of what is achievable within the privacy and cost constraints that real-world organizational deployments impose, and to identify which components of the multi-agent pipeline are most responsible for performance differences.
 
 \chapter{Methodology}
 
@@ -311,6 +372,16 @@ This research opens several avenues for future work. The most pressing need is t
 
 \begin{thebibliography}{}
 
+  \bibitem[Chen et al.(2025)]{chen2025viseval}
+  Chen, N., Zhang, Y., Xu, J., Ren, K., \& Yang, Y. (2025).
+  \textit{VisEval: A Benchmark for Data Visualization in the Era of Large Language Models}.
+  \textit{IEEE Transactions on Visualization and Computer Graphics}, 31(1), 1301--1311.
+
+  \bibitem[Dibia(2023)]{dibia2023lida}
+  Dibia, V. (2023).
+  \textit{LIDA: A Tool for Automatic Generation of Grammar-Agnostic Visualizations and Infographics using Large Language Models}.
+  In \textit{Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics: System Demonstrations} (pp.\ 113--126). Association for Computational Linguistics.
+
   \bibitem[Goswami et al.(2025)]{goswami2025plotgen}
   Goswami, K., Mathur, P., Rossi, R., \& Dernoncourt, F. (2025).
   \textit{PlotGen: Multi-Agent LLM-based Scientific Data Visualization via Multimodal Feedback}.
@@ -326,10 +397,55 @@ This research opens several avenues for future work. The most pressing need is t
   \textit{nvAgent: Automated Data Visualization from Natural Language via Collaborative Agent Workflow}.
   In \textit{Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)}. [3, 20]
 
+  \bibitem[Kwon et al.(2023)]{kwon2023vllm}
+  Kwon, W., Li, Z., Zhuang, S., Sheng, Y., Zheng, L., Yu, C.~H., Gonzalez, J.~E., Zhang, H., \& Stoica, I. (2023).
+  \textit{Efficient Memory Management for Large Language Model Serving with PagedAttention}.
+  In \textit{Proceedings of the 29th Symposium on Operating Systems Principles} (SOSP '23).
+
+  \bibitem[Li et al.(2024)]{li2024mas}
+  Li, X., Wang, S., Zeng, S., Wu, Y., \& Yang, Y. (2024).
+  \textit{A Survey on LLM-Based Multi-Agent Systems: Workflow, Infrastructure, and Challenges}.
+  \textit{Vicinagearth}, 1(1), 9.
+
+  \bibitem[Li et al.(2025)]{li2025prompt4vis}
+  Li, S., Chen, X., Song, Y., Song, Y., Zhang, C.~J., Hao, F., \& Chen, L. (2025).
+  \textit{Prompt4Vis: Prompting Large Language Models with Example Mining for Tabular Data Visualization}.
+  \textit{The VLDB Journal}, 34(4), article 38.
+
+  \bibitem[Lin et al.(2024)]{lin2024awq}
+  Lin, J., Tang, J., Tang, H., Yang, S., Chen, W.-M., Wang, W.-C., Xiao, G., Dang, X., Gan, C., \& Han, S. (2024).
+  \textit{AWQ: Activation-Aware Weight Quantization for LLM Compression and Acceleration}.
+  In \textit{Proceedings of Machine Learning and Systems} (MLSys 2024). \textit{Best Paper Award.}
+
+  \bibitem[Luo et al.(2021)]{luo2021nvbench}
+  Luo, Y., Tang, N., Li, G., Chai, C., Li, W., \& Qin, X. (2021).
+  \textit{Synthesizing Natural Language to Visualization (NL2VIS) Benchmarks from NL2SQL Benchmarks}.
+  In \textit{Proceedings of the 2021 International Conference on Management of Data} (SIGMOD '21) (pp.\ 1235--1247).
+
+  \bibitem[Luo et al.(2022)]{luo2022ncnet}
+  Luo, Y., Tang, N., Li, G., Tang, J., Chai, C., \& Qin, X. (2022).
+  \textit{Natural Language to Visualization by Neural Machine Translation}.
+  \textit{IEEE Transactions on Visualization and Computer Graphics}, 28(1), 217--226.
+
+  \bibitem[Maddigan \& Susnjak(2023)]{maddigan2023chat2vis}
+  Maddigan, P., \& Susnjak, T. (2023).
+  \textit{Chat2VIS: Generating Data Visualizations via Natural Language Using ChatGPT, Codex and GPT-3 Large Language Models}.
+  \textit{IEEE Access}, 11, 45181--45193.
+
+  \bibitem[Shi et al.(2025)]{shi2025visref}
+  Shi, S., Ren, T., Zhu, G., Feng, G., \& Hu, J. (2025).
+  \textit{Closing the Feedback Loop in Text2Vis: Refining Visualization with Vision-Language Models}.
+  In \textit{Proceedings of the 33rd ACM International Conference on Multimedia} (MM '25) (pp.\ 9053--9061).
+
+  \bibitem[Voigt et al.(2024)]{voigt2024plots}
+  Voigt, H., Lawonn, K., \& Zarrie\ss, S. (2024).
+  \textit{Plots Made Quickly: An Efficient Approach for Generating Visualizations from Natural Language Queries}.
+  In \textit{Proceedings of the 2024 Joint International Conference on Computational Linguistics, Language Resources and Evaluation} (LREC-COLING 2024) (pp.\ 12787--12793).
+
   \bibitem[Wu et al.(2024)]{wu2024automated}
   Wu, Y., Wan, Y., Zhang, H., Sui, Y., Wei, W., Zhao, W., Xu, G., \& Jin, H. (2024).
   \textit{Automated Data Visualization from Natural Language via Large Language Models: An Exploratory Study}.
-  arXiv preprint arXiv:2404.17136. [2]
+  \textit{Proceedings of the ACM on Management of Data}, 2(3), article 115.
 
   \bibitem[Yang et al.(2024)]{yang2024matplotagent}
   Yang, Z., Zhou, Z., Wang, S., Cong, X., Han, X., Yan, Y., Liu, Z., Tan, Z., Liu, P., Yu, D., Liu, Z., Shi, X., \& Sun, M. (2024).
@@ -341,10 +457,15 @@ This research opens several avenues for future work. The most pressing need is t
   \textit{Data-to-Dashboard: Multi-Agent LLM Framework for Insightful Visualization in Enterprise Analytics}.
   arXiv preprint arXiv:2505.23695. [11, 12]
 
+  \bibitem[Yu et al.(2018)]{yu2018spider}
+  Yu, T., Zhang, R., Yang, K., Yasunaga, M., Wang, D., Li, Z., Ma, J., Li, I., Yao, Q., Roman, S., Zhang, Z., \& Radev, D. (2018).
+  \textit{Spider: A Large-Scale Human-Labeled Dataset for Complex and Cross-Domain Semantic Parsing and Text-to-SQL}.
+  In \textit{Proceedings of the 2018 Conference on Empirical Methods in Natural Language Processing} (pp.\ 3911--3921).
+
   \bibitem[Zhu et al.(2024)]{zhu2024survey}
   Zhu, X., Li, Q., Cui, L., \& Liu, Y. (2024).
   \textit{Large Language Model Enhanced Text-to-SQL Generation: A Survey}.
-  arXiv preprint arXiv:2410.06011. [22, 23]
+  arXiv preprint arXiv:2410.06011.
 
 \end{thebibliography}
 
