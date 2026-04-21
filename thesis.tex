@@ -311,101 +311,94 @@ Where repeated trials are not computationally feasible, we report deterministic 
 
 \chapter{Results and Evaluation}
 
-This chapter presents the results of the \texttt{VisEval}-centered experimental protocol defined in Chapter 4. We first report aggregate single-table and multi-table outcomes for the local Qwen-family model sweep, then analyze failure composition and targeted ablations. Exploratory reviewer-agent findings are discussed as diagnostic evidence rather than as the primary performance driver.
+This chapter presents the main empirical findings of the local \texttt{VisEval}-based evaluation protocol introduced in Chapter 4. The analysis focuses on database-grounded correctness, reported through invalid rate, illegal rate, and pass rate, with results split into single-table and multi-table settings. We then examine where failures concentrate, discuss the reviewer-agent and ablation diagnostics, and conclude with the practical implications for privacy-preserving deployment.
 
-\section{Results 1: Performance on VisEval (Database Task)}
+\section{Main Performance on VisEval After Dataset Update}
 \label{sec:results_viseval}
 
-This experiment tests the core Text-to-SQL and data processing capabilities of the local multi-agent pipeline on \texttt{VisEval}. We compare local Qwen/Qwen-Coder configurations against reported \texttt{nvAgent} baselines (including GPT-4o-based results) to quantify the remaining gap under local deployment constraints.
+Table~\ref{tab:viseval_updated_core} summarizes the strongest local runs after updating to the final \texttt{VisEval} release (full metric breakdown in Appendix A, Table~\ref{tab:appendix_detailed_results}). Two trends stand out. First, coder-specialized models outperform similarly sized general instruction models, most clearly in multi-table queries. Second, scaling from 7B to 30B/32B primarily improves multi-table pass rate, which is the more challenging and practically relevant setting for enterprise-style schemas.
 
 \begin{table}[tb]
   \centering
-  \begin{tabular}{lcc}
+  \begin{tabular}{lccc}
     \toprule
-    \textbf{Model / Framework}                                  & \textbf{Pass Rate (Single-Table)} & \textbf{Pass Rate (Multi-Table)} \\
+    \textbf{Local Model} & \textbf{Pass (Single)} & \textbf{Pass (Multi)} & \textbf{Illegal (Multi)} \\
     \midrule
-    \texttt{nvAgent} (GPT-4o Baseline) \cite{ouyang2025nvagent} & 7.88\% (Improvement)              & 9.23\% (Improvement)             \\
-    \texttt{LocalVisAgent} (Llama 3, 8B)                        & 7.21\% (Improvement)              & 7.95\% (Improvement)             \\
-    \texttt{LocalVisAgent} (Mistral, 7B)                        & 6.88\% (Improvement)              & 7.14\% (Improvement)             \\
+    Qwen2.5-7B-Instruct & 62.64\% & 37.25\% & 32.98\% \\
+    Qwen2.5-Coder-7B-Instruct-AWQ & 65.08\% & 52.41\% & 34.58\% \\
+    Qwen2.5-Coder-14B-Instruct-AWQ & 73.54\% & 63.46\% & 26.73\% \\
+    Qwen2.5-Coder-32B-Instruct-AWQ & 75.67\% & 64.44\% & 26.13\% \\
+    Qwen3-Coder-30B-A3B-Instruct-FP8 & 75.40\% & 70.32\% & 21.57\% \\
     \bottomrule
   \end{tabular}
-  \caption{Pass Rate improvement over baselines on the \texttt{VisEval} benchmark. This metric tests the database querying and data processing accuracy.}
-  \label{tab:viseval_results}
+  \caption{Core local results on updated \texttt{VisEval}. Values are reported from the ``After VisEval Update'' block in Appendix A.}
+  \label{tab:viseval_updated_core}
 \end{table}
 
-As shown in Table~\ref{tab:viseval_results}, \texttt{LocalVisAgent} powered by Llama 3 retains a significant portion of the \texttt{nvAgent} baseline's performance. The original \texttt{nvAgent} reported a 9.23\% improvement in multi-table scenarios over prior state-of-the-art \cite{ouyang2025nvagent}, and our local implementation achieved a 7.95\% improvement. This result is highly encouraging, as it confirms that modern, small-scale local LLMs are capable of handling the complex schema filtering and multi-table SQL generation that \texttt{nvAgent} was designed for. The performance gap between Llama 3 and GPT-4o is minimal, validating our choice to use the \texttt{nvAgent} architecture as our database-processing backbone.
+Relative to the initial 7B instruction baseline, the best multi-table run (Qwen3-Coder-30B-A3B-Instruct-FP8) improves pass rate from 37.25\% to 70.32\%, a gain of 33.07 percentage points. This indicates that practical local performance depends less on a simple ``open-source versus proprietary'' dichotomy and more on choosing the right model specialization and scale for the data-integration-heavy parts of the pipeline.
 
-\section{Results 2: Performance on MatPlotBench (Visualization Task)}
-\label{sec:results_matplotbench}
+For context, the reported \texttt{nvAgent} proprietary-model baselines remain stronger at the top end \cite{ouyang2025nvagent}. At the same time, the local results in this thesis narrow the practical gap while preserving privacy and reproducibility requirements that motivate local deployment.
 
-This experiment tests the crucial second half of our hypothesis: whether our \texttt{MatPlotAgent}-inspired \texttt{Multimodal Critic} can improve visual fidelity. We evaluate performance on \texttt{MatPlotBench}, which requires generating visually complex and accurate plots.
+\section{Failure Composition: Invalid vs. Illegal}
 
-We compare three frameworks:
-\begin{enumerate}
-  \item \textbf{\texttt{MatPlotAgent} (GPT-4V Critic)}: The original framework with a proprietary VLM critic. This is our "gold standard" baseline for visual fidelity.[7]
-  \item \textbf{\texttt{nvAgent} (Original)}: The baseline \texttt{nvAgent} *without* our modifications. Its validator only checks for execution errors, not visual ones \cite{ouyang2025nvagent}.
-  \item \textbf{\texttt{LocalVisAgent} (LLaVA Critic)}: Our hybrid framework with the local VLM critic.
-\end{enumerate}
+Failure decomposition clarifies where further optimization is most needed. For smaller models, both invalid and illegal rates are high in multi-table cases. As model capability increases, invalid errors drop markedly, but illegal errors remain the dominant residual bottleneck. For example, moving from Qwen2.5-7B-Instruct to Qwen3-Coder-30B-A3B-Instruct-FP8 reduces multi-table invalid rate from 29.78\% to 8.10\%, while multi-table illegal rate remains 21.57\%.
 
-\begin{table}[tb]
-  \centering
-  \begin{tabular}{lc}
-    \toprule
-    \textbf{Model / Framework}                                        & \textbf{Automated Visual Score (0-100)} \\
-    \midrule
-    \texttt{MatPlotAgent} (GPT-4V Critic) \cite{yang2024matplotagent} & 61.16                                   \\
-    \texttt{LocalVisAgent} (LLaVA-1.5 Critic)                         & \textbf{42.53}                          \\
-    \texttt{nvAgent} (Original, Execution-Only Validator)             & 20.48                                   \\
-    \bottomrule
-  \end{tabular}
-  \caption{Automated Visual Fidelity Score on the \texttt{MatPlotBench} benchmark. This metric tests the final visual and aesthetic correctness of the generated plots.}
-  \label{tab:matplotbench_results}
-\end{table}
+This pattern suggests that execution stability can be improved substantially with stronger coder models, whereas semantic data grounding (correct joins, grouping, and value mapping) remains harder. Put differently, the system increasingly ``runs'' before it is consistently ``right.'' This interpretation aligns with the legality-oriented design of \texttt{VisEval}, which intentionally rejects executable but semantically incorrect charts \cite{chen2025viseval}.
 
-The results in Table~\ref{tab:matplotbench_results} are striking. The original \texttt{nvAgent} framework performs very poorly on \texttt{MatPlotBench}, achieving a score of only 20.48. This is expected; its validator approves any syntactically correct code, even if the resulting plot is visually wrong.
+Readability and quality are therefore treated as secondary diagnostics. Since readability checks are only evaluated after validity and legality pass, these scores are less informative for diagnosing the dominant failure source in lower-performing configurations.
 
-In contrast, our \texttt{LocalVisAgent} achieves a score of 42.53, more than doubling the performance of the \texttt{nvAgent} baseline. This demonstrates conclusively that the addition of the \texttt{Multimodal Critic} agent, even one powered by a small local VLM like LLaVA, provides a substantial and critical improvement in visual fidelity. While our local critic does not yet match the performance of the state-of-the-art proprietary GPT-4V (61.16) [16], it successfully proves the architectural hypothesis: the hybrid \texttt{nvAgent}+\texttt{MatPlotAgent} design is effective.
-
-\section{Qualitative Analysis and Ablation}
+\section{Reviewer-Agent and Ablation Diagnostics}
 \label{sec:results_qualitative}
 
-A qualitative example highlights the importance of the \texttt{Multimodal Critic} loop. Given a \texttt{MatPlotBench} query for a "3D Waterfall plot" with specific axis labels \cite{yang2024matplotagent}, the workflow proceeds as follows:
+Reviewer-agent experiments were retained as exploratory diagnostics rather than a central contribution. In the updated appendix table, the Qwen2.5-VL-7B-Instruct-AWQ reviewer configuration underperforms its non-reviewer counterpart: pass rate drops from 47.18\% to 40.94\% on single-table and from 22.21\% to 15.87\% on multi-table. This supports the interpretation that downstream visual review cannot compensate for upstream data-grounding failures.
 
-\begin{itemize}
-  \item \textbf{\texttt{nvAgent} (Original) Output:} The agent produces a standard 2D line chart. The code executes, so the \texttt{Validator} \emph{passes} it as correct, resulting in a failed task.
-  \item \textbf{\texttt{LocalVisAgent} (Iteration 1):} The \texttt{Synthesizer} generates code for a 3D waterfall plot, but forgets the z-axis label.
-  \item \textbf{\texttt{LocalVisAgent} (Critic Feedback):} The \texttt{LLaVA} critic ``looks'' at the image and provides the feedback: ``The plot is a 3D waterfall as requested, but the z-axis label is missing. It should be `Amplitude (a.u.)'.''
-  \item \textbf{\texttt{LocalVisAgent} (Iteration 2):} The \texttt{Synthesizer} receives this feedback, adds the \texttt{ax.set\_zlabel()} command to the script, and generates the final, correct plot.
-\end{itemize}
-
-
-This iterative refinement loop, enabled by our hybrid design, is responsible for the performance leap seen in Table~\ref{tab:matplotbench_results}. An ablation study, where we disabled the \texttt{Multimodal Critic} from \texttt{LocalVisAgent}, confirmed this: the score on \texttt{MatPlotBench} dropped from 42.53 to 21.15, nearly identical to the original \texttt{nvAgent} baseline.
+Recent ablation runs in the project results directory (for example, disabling Processor or Composer-template components) reinforce this conclusion: weakening schema filtering or structured planning typically reduces end-to-end pass rate, especially for multi-table queries. In practical terms, the highest-return improvements come from strengthening upstream reasoning and data integration before adding additional visual critique loops.
 
 \section{Discussion}
 \label{sec:discussion}
 
-Our results validate the central thesis of this work. First, the NL2Vis pipeline contains a fundamental "benchmark mismatch": \texttt{VisEval} tests database skills, while \texttt{MatPlotBench} tests visualization skills. A robust agent must be tested against both. Second, a hybrid architecture is necessary to succeed on both. Our \texttt{LocalVisAgent} successfully combines the "best-of-all-worlds"---`nvAgent`'s database processing and `MatPlotAgent`'s visual refinement---into a single, effective framework.
+Taken together, the results support three main conclusions.
+\begin{enumerate}
+  \item \textbf{Local open-source models are practically competitive for NL2Vis when model choice is optimized.} Coder-specialized 14B--32B/30B models provide substantial gains over small general instruction baselines, particularly on multi-table tasks.
+  \item \textbf{The dominant technical bottleneck is semantic data grounding.} Invalid rates can be reduced significantly, but illegal rates remain high enough to cap overall pass rate in difficult settings.
+  \item \textbf{Visual review is not the first-order lever in this setup.} Reviewer-agent experiments do not improve final pass outcomes when upstream legality checks fail.
+\end{enumerate}
 
-Third, our work serves as a strong proof-of-concept for the viability of local LLMs in complex, multi-agent systems. While there is a performance trade-off, especially in the VLM critic's nuanced understanding compared to GPT-4V, the ability to run a capable NL2Vis system at low cost and with complete data privacy is a significant contribution. The primary bottleneck is no longer the architecture, but the raw capability of the open-source VLM acting as the critic.
+These findings support a local-first deployment strategy for privacy-sensitive settings. At the same time, they make clear that further gains will likely come from better relational reasoning and query-to-schema alignment rather than additional downstream visual polishing.
 
 \chapter{Conclusion}
 
-This thesis confronted a core specialization gap in the Natural Language to Visualization (NL2Vis) landscape. State-of-the-art multi-agent frameworks are either expert database query engines (like \texttt{nvAgent}) that fail at visual refinement, or high-fidelity visual artists (like \texttt{MatPlotAgent}) that operate on simple data. This work introduced \texttt{LocalVisAgent}, a novel, hybrid framework that integrates \texttt{nvAgent}'s database-processing architecture with \texttt{MatPlotAgent}'s multimodal visual feedback loop.
+This thesis examined how far a locally deployed, \texttt{nvAgent}-style multi-agent NL2Vis pipeline can be pushed with open-source models. The central result is clear: local deployment is viable for meaningful database-grounded performance when model specialization and scale are chosen carefully.
 
-Our primary contribution is the design and validation of this hybrid architecture, powered entirely by local, open-source LLMs. By evaluating our framework on two distinct benchmarks, we demonstrated that \texttt{LocalVisAgent} retains the complex, multi-table database performance of \texttt{nvAgent} (tested on \texttt{VisEval}) while simultaneously, and dramatically, improving its visual and aesthetic accuracy by integrating a VLM-based critic (tested on \texttt{MatPlotBench}). We effectively prove that a "best-of-both-worlds" agent is not only possible, but necessary for a robust, end-to-end NL2Vis solution.
+The research questions from Chapter 4 can now be answered directly:
+\begin{enumerate}
+  \item \textbf{RQ1 (local vs. proprietary proximity):} local coder models substantially narrow the gap to reported proprietary baselines, with best observed performance at 75.40\% (single-table) and 70.32\% (multi-table) pass rate on updated \texttt{VisEval}.
+  \item \textbf{RQ2 (dominant failure category):} as model capability improves, invalid failures decrease strongly, but illegal failures remain the principal constraint, especially in multi-table settings.
+  \item \textbf{RQ3 (performance-efficiency trade-offs):} the largest gains come from moving from small general models to coder-specialized models and then to larger coder models; beyond that, improvements become more incremental and must be weighed against local compute budget.
+\end{enumerate}
+
+Accordingly, the main contribution is not a single architectural trick, but a calibrated empirical map of what currently works in a privacy-preserving local NL2Vis stack: which model families are worth deploying, where failures concentrate, and which optimization direction is most likely to improve pass rate.
 
 \section{Limitations}
 \label{sec:limitations}
-Despite its success, this work has several limitations.
+Despite the encouraging results, several limitations should be acknowledged.
 \begin{enumerate}
-  \item \textbf{VLM Critic Capability:} The primary performance bottleneck is the local VLM. \texttt{LLaVA-1.5-7B}, while capable, does not possess the same nuanced visual understanding as the proprietary GPT-4V model, leading to a performance gap on \texttt{MatPlotBench}.[7]
-  \item \textbf{Latency:} The iterative refinement loop of the \texttt{Critic-Synthesizer} agents, combined with the inference speed of local models, introduces significant latency compared to a single-shot proprietary model.
-  \item \textbf{Insight Generation:} The "insight generation" step, inspired by \texttt{Data-to-Dashboard} [11], is still basic. It can recommend chart types but struggles with generating deep, non-obvious analytical insights from the data.
+  \item \textbf{Single-run determinism over repeated trials:} most reported results are deterministic single-run evaluations, which improves reproducibility but limits statistical uncertainty estimation.
+  \item \textbf{Infrastructure constraints:} experiments were conducted under bounded local/cluster hardware resources; this constrains broader sweeps over larger models and more repetitions.
+  \item \textbf{Readability pipeline dependencies:} readability and layout assessment depend on additional components (vision judge and browser tooling), which introduces cost and operational fragility relative to the core pass-rate evaluation.
 \end{enumerate}
 
 \section{Future Work}
 \label{sec:future_work}
-This research opens several avenues for future work. The most pressing need is to improve the local critic; this could be achieved by fine-tuning a VLM on a specialized dataset of "bad" charts and "good" feedback. Second, the framework could be extended to a fully conversational, human-in-the-loop system, where the user can provide feedback to the critic directly.[11, 17] Finally, the framework's output could be expanded from single charts to complete, multi-visualization dashboards, fully realizing the vision of \texttt{Data-to-Dashboard}.[13, 12]
+Future work should prioritize improvements in the same order as the observed bottlenecks:
+\begin{enumerate}
+  \item \textbf{Data-grounding-first optimization:} improve schema filtering, join reliability, and query-to-VQL consistency checks in Processor/Composer stages.
+  \item \textbf{Targeted ablation expansion:} complete systematic ablations across model scales to isolate which agent components contribute most under local constraints.
+  \item \textbf{Interactive correction loops:} extend the system to multi-turn human-in-the-loop interaction with memory, then evaluate whether iterative user feedback improves legality outcomes.
+  \item \textbf{Benchmark extension:} augment current one-shot evaluation with controlled iterative scenarios, so correction ability can be measured directly rather than inferred.
+\end{enumerate}
+
+In summary, this thesis shows that local NL2Vis is already strong enough to be relevant for many privacy-sensitive use cases. The next stage of progress will depend primarily on improving relational reasoning and data grounding, rather than adding more downstream visual critique.
 
 \begin{thebibliography}{}
 
@@ -600,6 +593,8 @@ Qwen3-Coder-30B-A3B-Instruct-FP8 & 4.61\% & 19.99\% & 75.40\% & 3.49 & 2.63 & 8.
 \bottomrule
 \end{tabular}
 }
+\caption{Detailed single-table and multi-table metrics across reported baselines and local runs, including the post-update \texttt{VisEval} results used in the main chapter analysis.}
+\label{tab:appendix_detailed_results}
 \end{table}
 
 % \midrule
