@@ -108,3 +108,14 @@ Discussion/possible improvements:
   * With updated Streamlit/modern framework interface  
   * With chat history?  
   * Iterative conversation
+
+*Things to possibly justify with research:*
+1. Multi-agent system to improve performance
+2. Distrust in larger AI companies/APIs
+3. What is good visualization, especially according to a user request
+4. vLLM as LLM server
+5. Qwen models
+6. Fine-tuned models
+7. Quantization performance
+8. Probability/standard deviation of getting worse/better performance from LLMs. Or confidence that LLM should  perform just as well over multiple runs.
+9. Performance and inference speed without processor/enhanced schemas

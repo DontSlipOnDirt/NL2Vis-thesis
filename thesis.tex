@@ -184,11 +184,15 @@ This thesis takes nvAgent's architecture as its baseline and investigates how it
 
 This thesis adopts an \texttt{nvAgent}-style multi-agent pipeline as the core method and evaluates how far locally served open-source models can support end-to-end NL2Vis on realistic database tasks \cite{ouyang2025nvagent}. The methodological goal is practical rather than purely architectural novelty: preserve strong data integration behavior while operating under local deployment constraints (privacy, reproducibility, and bounded inference cost).
 
+Method choices are grounded in prior literature before empirical validation. Specifically, the decomposition into specialized agents follows evidence that modular workflows improve robustness on complex NL2Vis and related multi-agent tasks \cite{ouyang2025nvagent,li2024mas}; structured schema reduction and prompt design are motivated by gains reported for context filtering and example-conditioned prompting \cite{li2025prompt4vis,wu2024automated}; and visual-feedback loops are treated as a testable extension rather than an assumed improvement, because reported benefits are benchmark- and task-dependent \cite{yang2024matplotagent,shi2025visref}.
+
 \section{Objective and Scope Assumptions}
 
 The system is designed for single-turn NL2Vis generation under the same assumptions used by \texttt{VisEval}: prompts are intentionally unambiguous and the target database identifier is provided \cite{chen2025viseval}. This scope is deliberate. It isolates model and agent behavior on data retrieval and chart correctness before extending to multi-turn conversational interaction.
 
 The primary evaluation target is therefore database-grounded correctness rather than open-ended aesthetic preference. Human-in-the-loop interaction and conversational memory are treated as future extensions, not as part of the core method validated in this thesis.
+
+This controlled scope also reflects a known tension in the field. Real user requests are often ambiguous or underspecified \cite{maddigan2023chat2vis}, and benchmark distributions may not perfectly match practical usage patterns \cite{nguyen2024bench}. We therefore frame our method as a capability study under explicit assumptions, not as a claim that one-shot benchmark performance fully captures interactive production behavior.
 
 \section{Pipeline Architecture}
 
@@ -206,13 +210,23 @@ An optional reviewer-style visual loop was implemented as an exploratory extensi
 The Processor receives the user query and full database context, filters tables and columns, and produces an augmented schema representation for downstream agents. The practical purpose is to reduce prompt context while preserving columns required for correct joins, grouping, and filtering. This stage also emits a query complexity signal (single-table vs.
 multi-table) used for routing prompt templates.
 
+The design contract of this stage is conservative recall over aggressive pruning: removing irrelevant schema context improves token efficiency, but omitting join-critical columns can induce legality failures downstream. This trade-off is consistent with prior observations that schema/context representation strongly affects NL2Vis and text-to-SQL outcomes \cite{wu2024automated,li2025prompt4vis}.
+
 \subsection{Composer}
 
 The Composer maps the processed schema context and user intent to a structured visualization query representation (VQL-like intermediate form). This representation explicitly captures chart type, selected fields, aggregation logic, grouping/order choices, and time binning when needed. By separating planning from final code rendering, this stage provides a stable interface for downstream validation and iterative repair.
 
+The explicit intermediate representation is used to reduce error propagation from natural-language ambiguity into final code. In effect, the Composer acts as a semantic checkpoint: if intent grounding is weak here, later code refinement typically improves executability more than semantic correctness.
+
 \subsection{Validator}
 
 The Validator translates the intermediate representation into executable Python visualization code, executes it, and checks execution errors. If execution fails, the error trace is fed back into bounded refinement rounds. In the implemented setup, refinement is capped to a small fixed number of iterations to prevent unbounded latency and to keep comparisons across models fair.
+
+This stage is intentionally execution-first but evaluation-aware: execution success is necessary yet insufficient, since \texttt{VisEval} legality checks reject semantically wrong but runnable charts \cite{chen2025viseval}. This distinction is central to the later failure analysis.
+
+\subsection{Methodological Scope and Known Tensions}
+
+Recent visual-feedback systems report meaningful gains through multimodal critique loops \cite{yang2024matplotagent,shi2025visref}. At the same time, those gains are often demonstrated in settings where data retrieval is simplified relative to multi-table enterprise-style NL2Vis. Our methodology therefore treats visual critique as an optional diagnostic path and prioritizes data-grounding quality first. This is a conflict-aware design decision: it does not reject visual-feedback literature, but tests whether its benefits transfer under \texttt{VisEval}-style legality constraints and local-model limits.
 
 \section{Prompting and Refinement Protocol}
 
@@ -227,17 +241,23 @@ Refinement follows a strict stop policy:
 
 This policy makes failure counts interpretable and reproducible across model variants.
 
+We keep prompt workflow and stop conditions fixed across model variants to reduce confounding. In other words, observed differences are interpreted primarily as capability differences, not protocol differences. This choice follows standard benchmarking practice for controlled comparison, but it also limits exploration of adaptive prompting strategies that may improve absolute performance.
+
 \section{Local Inference Stack}
 
 All local model inference is served through vLLM \cite{kwon2023vllm}. We evaluate instruction-tuned and code-specialized Qwen-family models under constrained hardware using quantization where required (AWQ/FP8 configurations depending on model size) \cite{lin2024awq}. This design reflects the deployment target of privacy-sensitive settings where external API calls are restricted.
 
 The serving configuration keeps core generation parameters fixed across runs (context budget, output token cap, deterministic decoding), so observed differences are primarily attributable to model capability rather than aggressive hyperparameter retuning.
 
+This stack is selected for deployment realism rather than maximal leaderboard performance. vLLM and quantization enable practical local serving of mid-to-large models, but quantization may alter behavior on difficult reasoning cases; accordingly, we interpret efficiency gains and quality changes jointly instead of assuming monotonic improvements from either model scale or compression alone.
+
 \section{Reproducibility by Design}
 
 Methodologically, the pipeline is implemented with centralized configuration, structured logging of run outputs, and scriptable evaluation entry points. This supports consistent reruns across model variants and enables direct mapping from chapter claims to executable artifacts.
 
 At the same time, we explicitly acknowledge a current reproducibility limitation: most comparisons are deterministic single-run evaluations rather than repeated stochastic trials. This is addressed in the experimental protocol through transparent reporting and, where feasible, additional robustness analysis.
+
+Consequently, claims in this thesis are framed as directional and configuration-specific: they indicate where bottlenecks and improvements concentrate under fixed settings, while leaving full variance estimation and broader statistical generalization as future work.
 
 \chapter{Experimental Setup}
 
@@ -260,6 +280,8 @@ The primary benchmark is \texttt{VisEval} \cite{chen2025viseval}, which includes
 
 No additional benchmark is required to support the core claims in this chapter. Exploratory visual-review experiments are reported separately and are not used to define the main contribution.
 
+This benchmark choice prioritizes measurement reliability over interaction breadth. It offers strong legality-focused diagnostics, but does not cover iterative conversational correction or broad prompt ambiguity. We therefore treat benchmark conclusions as high-confidence for one-shot, database-grounded generation and lower-confidence for open-ended human-in-the-loop settings \cite{chen2025viseval,nguyen2024bench}.
+
 \section{Model Inventory and Serving Configuration}
 \label{sec:models_baselines}
 
@@ -274,6 +296,11 @@ To keep comparisons fair:
   \item prompt workflow and refinement limits are unchanged between model variants.
 \end{itemize}
 
+The experiment matrix follows four axes: (i) model specialization (general-instruction vs. coder-specialized), (ii) parameter scale, (iii) deployment format (quantized or non-quantized where available), and (iv) optional reviewer-agent activation. This structure directly supports RQ1--RQ3 by separating model capability effects from protocol effects.
+
+Model selection is literature-informed rather than exhaustive. Coder-specialized models are prioritized because NL2Vis includes substantial code synthesis and repair demands \cite{wu2024automated}; smaller models are retained as efficiency baselines \cite{voigt2024plots}; and proprietary baselines are treated as reference ceilings from prior reports \cite{ouyang2025nvagent}.
+Published evaluations also report strong dependence on visualization complexity, with larger drops on harder chart reasoning tasks, which further motivates explicit failure decomposition instead of single aggregate reporting \cite{khan2025llmvis}.
+
 \section{Metrics and Pass Criteria}
 \label{sec:metrics}
 
@@ -285,6 +312,8 @@ We follow \texttt{VisEval}'s metric decomposition \cite{chen2025viseval}:
 \end{itemize}
 
 When available, readability/quality scores from judge-based evaluation are reported as secondary diagnostics rather than primary success criteria, because the core bottleneck in our runs is data integration correctness.
+
+This ordering reflects both evaluation logic and practical risk: an aesthetically acceptable chart with incorrect values is a higher-severity failure than a less polished chart with correct data grounding. The pass-rate decomposition is therefore the principal instrument for identifying where the pipeline fails.
 
 \section{Experimental Protocol}
 
@@ -301,13 +330,19 @@ quantized deployment variants when both are available.
 In addition to aggregate metrics, we inspect failure composition (invalid vs.
 illegal) to identify whether improvements come from better code execution stability or better semantic data grounding.
 
+All runs use the same prompting workflow and stopping rules to preserve comparability. Where ablation or reviewer experiments are discussed, they are interpreted diagnostically: the purpose is to localize bottlenecks, not to claim universally superior architecture variants.
+
 \section{Exploratory Reviewer-Agent Study}
 
 A reviewer/visual-critic extension was tested as an exploratory add-on. In this thesis, it is treated as a diagnostic experiment rather than the main method: results indicate that gains are limited when upstream data correctness fails first. Consequently, reviewer-agent findings are reported as supporting evidence for bottleneck analysis, not as the primary source of pass-rate improvement.
 
+This positioning intentionally contrasts with literature where visual-feedback loops improve outcome quality \cite{yang2024matplotagent,shi2025visref}. Our interpretation is that transfer depends on failure regime: when legality errors dominate, additional visual critique may have lower marginal utility than upstream data-grounding improvements.
+
 \section{Reliability and Reporting Constraints}
 
 Where repeated trials are not computationally feasible, we report deterministic single-run outcomes with explicit caveats. This prevents overstating statistical certainty while preserving comparability across many model variants. The final interpretation therefore prioritizes consistent effect direction across splits and metrics over fragile point estimates.
+
+To avoid post-hoc confirmation bias, result interpretation follows a fixed order: prior expectation from literature, observed behavior under the present setup, and then bounded conclusions tied to scope assumptions. Where conflicts with prior work arise, we report them explicitly and attribute them to plausible setup differences (benchmark design, bottleneck location, and local-resource constraints) rather than forcing artificial agreement.
 
 \chapter{Results and Evaluation}
 
@@ -384,7 +419,7 @@ Accordingly, the main contribution is not a single architectural trick, but a ca
 Despite the encouraging results, several limitations should be acknowledged.
 \begin{enumerate}
   \item \textbf{Single-run determinism over repeated trials:} most reported results are deterministic single-run evaluations, which improves reproducibility but limits statistical uncertainty estimation.
-  \item \textbf{Infrastructure constraints:} experiments were conducted under bounded local/cluster hardware resources; this constrains broader sweeps over larger models and more repetitions.
+  \item \textbf{Infrastructure constraints:} experiments were conducted under bounded local/cluster hardware resources; this constrains broader sweeps over larger models and more repetitions. More specifically: H100 slice (40 GB MIG), 16 CPUs, 64 GB RAM, which limits the largest model and quantization configurations that can be tested.
   \item \textbf{Readability pipeline dependencies:} readability and layout assessment depend on additional components (vision judge and browser tooling), which introduces cost and operational fragility relative to the core pass-rate evaluation.
 \end{enumerate}
 
@@ -462,6 +497,16 @@ In summary, this thesis shows that local NL2Vis is already strong enough to be r
   \textit{Chat2VIS: Generating Data Visualizations via Natural Language Using ChatGPT, Codex and GPT-3 Large Language Models}.
   \textit{IEEE Access}, 11, 45181--45193.
 
+  \bibitem[Nguyen et al.(2024)]{nguyen2024bench}
+  Nguyen, H., He, X., Reeson, A., Paris, C., Poon, J., \& Kummerfeld, J.~K. (2024).
+  \textit{Do Text-to-Vis Benchmarks Test Real Use of Visualisations?}.
+  arXiv preprint arXiv:2407.19726.
+
+  \bibitem[Khan et al.(2025)]{khan2025llmvis}
+  Khan, S.~R., Chandak, V., \& Mukherjea, S. (2025).
+  \textit{Evaluating LLMs for Visualization Generation and Understanding}.
+  \textit{Discover Data}, 3(1), 15.
+
   \bibitem[Shi et al.(2025)]{shi2025visref}
   Shi, S., Ren, T., Zhu, G., Feng, G., \& Hu, J. (2025).
   \textit{Closing the Feedback Loop in Text2Vis: Refining Visualization with Vision-Language Models}.
@@ -503,28 +548,8 @@ In summary, this thesis shows that local NL2Vis is already strong enough to be r
 \appendix
 \chapter{Additional Experimental Results}
 
-This appendix contains supplementary figures and tables from our experimental runs, including detailed performance breakdowns of \texttt{LocalVisAgent} using the Mistral-7B models and further qualitative examples from the \texttt{VisEval} multi-table scenarios.
-
-\lipsum[1-2]
-
-\begin{table}[tb]
-  \centering
-  \begin{tabular}{lcr}
-    \toprule
-    \textbf{Model}         & \textbf{Benchmark}    & \textbf{Primary Metric Score} \\
-    \midrule
-    Llama-3-8B (Processor) & VisEval (Multi-Table) & 7.95\% (Pass Rate Impr.)      \\
-    Mistral-7B (Processor) & VisEval (Multi-Table) & 7.14\% (Pass Rate Impr.)      \\
-    LLaVA-1.5-7B (Critic)  & MatPlotBench          & 42.53 (Visual Score)          \\
-    GPT-4o (Baseline)      & VisEval (Multi-Table) & 9.23\% (Pass Rate Impr.)      \\
-    GPT-4V (Baseline)      & MatPlotBench          & 61.16 (Visual Score)          \\
-    \bottomrule
-  \end{tabular}
-  \caption{Summary of primary metric scores for local models vs. proprietary baselines across both benchmarks.}
-  \label{tab:summary_results}
-\end{table}
-
-\lipsum[3-4]
+This appendix contains supplementary figures and tables from our experimental runs, including detailed performance breakdowns.
+GitHub link: \url{https://github.com/DontSlipOnDirt/NL2Vis}.
 
 % Define colors to match the image
 \definecolor{goodgreen}{RGB}{0, 153, 0}
@@ -589,6 +614,18 @@ Qwen2.5-Coder-14B-Instruct-AWQ & 4.77\% & 21.68\% & 73.54\% & 3.37 & 2.49 & 9.81
 Qwen2.5-Coder-32B-Instruct-AWQ & 6.44\% & 17.89\% & 75.67\% & 3.47 & 2.63 & 9.44\% & 26.13\% & 64.44\% & 3.51 & 2.24 \\
 
 Qwen3-Coder-30B-A3B-Instruct-FP8 & 4.61\% & 19.99\% & 75.40\% & 3.49 & 2.63 & 8.10\% & 21.57\% & 70.32\% & 3.49 & 2.46 \\
+
+\midrule
+\multicolumn{11}{c}{\textbf{w/o Processor}} \\
+\midrule
+
+Qwen2.5-Coder-7B-Instruct  & 7.17\% & 27.05\% & 65.77\% & -- & -- & 8.38\% & 34.36\% & 57.25\% & -- & -- \\
+
+Qwen2.5-Coder-14B-Instruct-AWQ & 4.73\% & 21.71\% & 73.56\% & -- & -- & 9.45\% & 26.87\% & 63.68\% & -- & -- \\
+
+Qwen2.5-Coder-32B-Instruct-AWQ & 7.05\% & 17.73\% & 75.21\% & -- & -- & 9.85\% & 26.64\% & 63.50\% & -- & -- \\
+
+Qwen3-Coder-30B-A3B-Instruct-FP8 & 4.67\% & 19.84\% & 75.49\% & -- & -- & 5.77\% & 23.23\% & 71.00\% & -- & -- \\
 
 \bottomrule
 \end{tabular}
