@@ -1,6 +1,8 @@
 .vscode/
 # sources/
 papers/
+CLAUDE.md
+.claude/
 
 ### LaTeX ###
 ## Core latex/pdflatex auxiliary files:
