@@ -4,6 +4,13 @@ papers/
 CLAUDE.md
 .claude/
 
+# results and visualizations
+results_synced/
+.python-version
+uv.lock
+pyproject.toml
+.venv/
+
 ### LaTeX ###
 ## Core latex/pdflatex auxiliary files:
 *.aux
