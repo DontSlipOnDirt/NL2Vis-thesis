@@ -15,6 +15,8 @@
 \usepackage{csquotes}
 \renewcommand{\algorithmiccomment}[1]{\hfill\textit{// #1}}
 \usepackage[dvipsnames]{xcolor}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
 \usepackage[colorlinks,citecolor=Green]{hyperref} % you may change/remove the colors
 \usepackage{lipsum} % you do not need this
 
@@ -611,21 +613,19 @@ Qwen2.5-Coder-7B-Instruct-AWQ & 7.55\% & 27.37\% & 65.08\% & -- & -- & 13.01\% &
 
 Qwen2.5-Coder-14B-Instruct-AWQ & 4.77\% & 21.68\% & 73.54\% & 3.37 & 2.49 & 9.81\% & 26.73\% & 63.46\% & 3.37 & 2.13 \\
 
-Qwen2.5-Coder-32B-Instruct-AWQ & 6.44\% & 17.89\% & 75.67\% & 3.47 & 2.63 & 9.44\% & 26.13\% & 64.44\% & 3.51 & 2.24 \\
+Qwen2.5-Coder-32B-Instruct-AWQ & 5.67\% & 21.84\% & 72.50\% & 3.57 & 2.59 & 10.27\% & 26.01\% & 63.72\% & 3.70 & 2.37 \\
 
-Qwen3-Coder-30B-A3B-Instruct-FP8 & 4.61\% & 19.99\% & 75.40\% & 3.49 & 2.63 & 8.10\% & 21.57\% & 70.32\% & 3.49 & 2.46 \\
+Qwen3-Coder-30B-A3B-Instruct-FP8 & 4.79\% & 20.06\% & 75.15\% & -- & -- & 7.53\% & 21.66\% & 70.81\% & -- & -- \\
 
 \midrule
 \multicolumn{11}{c}{\textbf{w/o Processor}} \\
 \midrule
 
-Qwen2.5-Coder-7B-Instruct  & 7.17\% & 27.05\% & 65.77\% & -- & -- & 8.38\% & 34.36\% & 57.25\% & -- & -- \\
-
 Qwen2.5-Coder-14B-Instruct-AWQ & 4.73\% & 21.71\% & 73.56\% & -- & -- & 9.45\% & 26.87\% & 63.68\% & -- & -- \\
 
 Qwen2.5-Coder-32B-Instruct-AWQ & 7.05\% & 17.73\% & 75.21\% & -- & -- & 9.85\% & 26.64\% & 63.50\% & -- & -- \\
 
-Qwen3-Coder-30B-A3B-Instruct-FP8 & 4.67\% & 19.84\% & 75.49\% & -- & -- & 5.77\% & 23.23\% & 71.00\% & -- & -- \\
+Qwen3-Coder-30B-A3B-Instruct-FP8 & 4.60\% & 19.41\% & 75.99\% & -- & -- & 5.36\% & 24.22\% & 70.42\% & -- & -- \\
 
 \bottomrule
 \end{tabular}
@@ -633,6 +633,39 @@ Qwen3-Coder-30B-A3B-Instruct-FP8 & 4.67\% & 19.84\% & 75.49\% & -- & -- & 5.77\%
 \caption{Detailed single-table and multi-table metrics across reported baselines and local runs, including the post-update \texttt{VisEval} results used in the main chapter analysis.}
 \label{tab:appendix_detailed_results}
 \end{table}
+
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  ybar,
+  bar width=8pt,
+  width=0.95\textwidth,
+  height=7cm,
+  ymin=0,
+  ymax=80,
+  ylabel={Pass Rate (\%)},
+  symbolic x coords={7B,7B-Coder,14B-Coder,32B-Coder,30B-Coder,14B-noProc,32B-noProc,30B-noProc},
+  xtick=data,
+  x tick label style={rotate=30,anchor=east},
+  legend style={at={(0.5,1.02)},anchor=south,legend columns=2},
+  nodes near coords,
+  nodes near coords align={vertical}
+]
+\addplot+[fill=Blue!55] coordinates {
+ (7B,62.64) (7B-Coder,65.08) (14B-Coder,73.54) (32B-Coder,72.50) (30B-Coder,75.15)
+ (14B-noProc,73.56) (32B-noProc,75.21) (30B-noProc,75.99)
+};
+\addplot+[fill=Orange!75] coordinates {
+ (7B,37.25) (7B-Coder,52.41) (14B-Coder,63.46) (32B-Coder,63.72) (30B-Coder,70.81)
+ (14B-noProc,63.68) (32B-noProc,63.50) (30B-noProc,70.42)
+};
+\legend{Single-table,Multi-table}
+\end{axis}
+\end{tikzpicture}
+\caption{Pass-rate overview from Table~\ref{tab:appendix_detailed_results}, comparing updated full-pipeline runs and no-Processor ablations.}
+\label{fig:appendix_pass_overview}
+\end{figure}
 
 
 \section{Inference Performance Analysis}
@@ -646,17 +679,41 @@ Qwen3-Coder-30B-A3B-Instruct-FP8 & 4.67\% & 19.84\% & 75.49\% & -- & -- & 5.77\%
 \midrule
 \multicolumn{5}{c}{\textit{With Processor (Full Pipeline)}} \\
 \midrule
-Qwen2.5-Coder-7B & 5.12 & 11.13 & 2.19 & 62.43\% \\
-Qwen2.5-Coder-14B-AWQ & 2.68 & 5.87 & 2.19 & 69.24\% \\
+Qwen3-Coder-30B-A3B-FP8 & 4.25 & 8.62 & 2.19 & 73.44\% \\
 \midrule
 \multicolumn{5}{c}{\textit{Without Processor (Ablation)}} \\
 \midrule
-Qwen2.5-Coder-14B-AWQ & 2.41 & 5.28 & 2.19 & 69.70\% \\
+Qwen3-Coder-30B-A3B-FP8 & 2.00 & 3.74 & 2.19 & 73.80\% \\
 \bottomrule
 \end{tabular}
 \caption{Inference time and iteration metrics with and without the Processor agent. The Processor adds minimal latency while improving data integration quality, though pass rate improvements are modest in these configurations.}
 \label{tab:inference_time}
 \end{table}
+
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  ybar,
+  bar width=14pt,
+  width=0.8\textwidth,
+  height=6cm,
+  ymin=0,
+  ymax=10,
+  ylabel={Seconds},
+  symbolic x coords={Full Pipeline,No Processor},
+  xtick=data,
+  legend style={at={(0.5,1.02)},anchor=south,legend columns=2},
+  nodes near coords
+]
+\addplot+[fill=Yellow!70] coordinates {(Full Pipeline,4.25) (No Processor,2.00)};
+\addplot+[fill=Purple!55] coordinates {(Full Pipeline,8.62) (No Processor,3.74)};
+\legend{Avg. inference time,Total inference time}
+\end{axis}
+\end{tikzpicture}
+\caption{Inference-time comparison from Table~\ref{tab:inference_time} for Qwen3-Coder-30B-A3B-FP8 with and without Processor.}
+\label{fig:appendix_inference_time}
+\end{figure}
 
 
 \section{Ablation Study Results}
@@ -671,25 +728,54 @@ Qwen2.5-Coder-14B-AWQ & 2.41 & 5.28 & 2.19 & 69.70\% \\
 \multicolumn{7}{c}{\textit{Qwen2.5-Coder-14B-Instruct-AWQ}} \\
 \midrule
 Full Pipeline & 4.77\% & 21.68\% & \textbf{73.54\%} & 9.81\% & 26.73\% & \textbf{63.46\%} \\
-No Processor & 4.70\% & 21.66\% & 73.63\% & 9.48\% & 26.85\% & 63.67\% \\
-No Composer Template & 11.86\% & 88.72\% & 3.21\% & 29.10\% & 69.79\% & 1.11\% \\
-No Proc. + No Comp. Tmpl. & -- & -- & -- & -- & -- & -- \\
+No Processor & 4.73\% & 21.71\% & 73.56\% & 9.45\% & 26.87\% & 63.68\% \\
+No Composer Template & 8.07\% & 88.72\% & 3.21\% & 29.10\% & 69.79\% & 1.11\% \\
+No Proc. + No Comp. Tmpl. & 8.56\% & 87.88\% & 3.56\% & 29.82\% & 68.83\% & 1.35\% \\
 \midrule
 \multicolumn{7}{c}{\textit{Qwen2.5-Coder-32B-Instruct-AWQ}} \\
 \midrule
-Full Pipeline & 6.44\% & 17.89\% & \textbf{75.67\%} & 9.44\% & 26.13\% & \textbf{64.44\%} \\
-No Processor & -- & -- & -- & -- & -- & -- \\
-No Composer Template & -- & -- & -- & -- & -- & -- \\
+Full Pipeline & 5.67\% & 21.84\% & \textbf{72.50\%} & 10.27\% & 26.01\% & \textbf{63.72\%} \\
+No Processor & 7.05\% & 17.73\% & 75.21\% & 9.85\% & 26.64\% & 63.50\% \\
+No Composer Template & 11.36\% & 83.03\% & 5.60\% & 13.57\% & 85.43\% & 1.00\% \\
 \midrule
 \multicolumn{7}{c}{\textit{Qwen3-Coder-30B-A3B-Instruct-FP8}} \\
 \midrule
-Full Pipeline & 4.61\% & 19.99\% & \textbf{75.40\%} & 8.10\% & 21.57\% & \textbf{70.32\%} \\
-No Processor & -- & -- & -- & -- & -- & -- \\
+Full Pipeline & 4.79\% & 20.06\% & 75.15\% & 7.53\% & 21.66\% & \textbf{70.81\%} \\
+No Processor & 4.60\% & 19.41\% & \textbf{75.99\%} & 5.36\% & 24.22\% & 70.42\% \\
 \bottomrule
 \end{tabular}
 \caption{Ablation study results showing the impact of removing key pipeline components. The Composer Template is critical---removing it causes catastrophic failure (pass rate drops below 5\%). The Processor shows minimal impact on final pass rates, though it aids in schema filtering for complex databases.}
 \label{tab:ablation_results}
 \end{table}
+
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  ybar,
+  bar width=11pt,
+  width=0.95\textwidth,
+  height=7cm,
+  ymin=0,
+  ymax=80,
+  ylabel={Multi-table Pass Rate (\%)},
+  symbolic x coords={14B-Full,14B-noProc,14B-noComp,14B-noProc-noComp,32B-Full,32B-noProc,32B-noComp,30B-Full,30B-noProc},
+  xtick=data,
+  x tick label style={rotate=30,anchor=east},
+  nodes near coords,
+  nodes near coords align={vertical},
+  every node near coord/.append style={font=\scriptsize}
+]
+\addplot+[fill=OliveGreen!70] coordinates {
+ (14B-Full,63.46) (14B-noProc,63.68) (14B-noComp,1.11) (14B-noProc-noComp,1.35)
+ (32B-Full,63.72) (32B-noProc,63.50) (32B-noComp,1.00)
+ (30B-Full,70.81) (30B-noProc,70.42)
+};
+\end{axis}
+\end{tikzpicture}
+\caption{Multi-table ablation comparison from Table~\ref{tab:ablation_results}. Removing the Composer template causes near-collapse across model sizes.}
+\label{fig:appendix_ablation_multitable}
+\end{figure}
 
 
 \section{Check Failure Analysis}
@@ -701,20 +787,46 @@ No Processor & -- & -- & -- & -- & -- & -- \\
 \textbf{Model} & \textbf{Code} & \textbf{Data} & \textbf{Chart} & \textbf{Order} & \textbf{Scale \&} & \textbf{Pass} \\
  & \textbf{Exec.} & \textbf{Check} & \textbf{Type} & \textbf{Check} & \textbf{Ticks} & \textbf{Rate} \\
 \midrule
-Qwen2.5-7B & 6.64\% & \textbf{20.47\%} & 2.09\% & 9.46\% & -- & 62.43\% \\
-Qwen2.5-Coder-7B-AWQ & -- & \textbf{19.83\%} & 1.94\% & 7.77\% & -- & 65.08\% \\
-Qwen2.5-Coder-14B-AWQ & 6.40\% & \textbf{17.15\%} & 1.93\% & 6.88\% & -- & 73.54\% \\
-Qwen2.5-Coder-32B-AWQ & -- & \textbf{15.89\%} & 1.83\% & 6.44\% & -- & 75.67\% \\
-Qwen3-Coder-30B-A3B-FP8 & 5.70\% & \textbf{27.39\%} & 2.29\% & 7.53\% & 35.83\% & 59.22\% \\
+Qwen2.5-7B & 15.44\% & \textbf{21.24\%} & 2.80\% & 9.25\% & 26.00\% & 52.66\% \\
+Qwen2.5-Coder-7B-AWQ & 9.05\% & \textbf{20.76\%} & 3.33\% & 9.45\% & -- & 60.10\% \\
+Qwen2.5-Coder-14B-AWQ & 6.58\% & \textbf{16.63\%} & 1.77\% & 6.87\% & 37.95\% & 69.58\% \\
+Qwen2.5-Coder-32B-AWQ & 6.80\% & \textbf{16.33\%} & 1.51\% & 6.49\% & 27.58\% & 69.04\% \\
+Qwen3-Coder-30B-A3B-FP8 & 5.78\% & \textbf{13.33\%} & 1.82\% & 7.31\% & -- & 73.44\% \\
 \midrule
 \multicolumn{7}{c}{\textit{Ablation: No Composer Template}} \\
 \midrule
-Qwen2.5-Coder-14B-AWQ & 7.26\% & \textbf{80.92\%} & \textbf{79.39\%} & 1.80\% & -- & 2.39\% \\
+Qwen2.5-Coder-14B-AWQ & 7.26\% & \textbf{80.92\%} & \textbf{79.39\%} & 0.36\% & -- & 2.39\% \\
 \bottomrule
 \end{tabular}
 \caption{Frequency of check failures across evaluation metrics. \textbf{Data Check} is consistently the dominant failure mode, accounting for 15--27\% of failures in functional configurations. Without the Composer Template, data and chart type failures exceed 79\%, confirming that structured intermediate representation is essential for correctness.}
 \label{tab:check_failures}
 \end{table}
+
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  ybar stacked,
+  bar width=11pt,
+  width=0.95\textwidth,
+  height=7cm,
+  ymin=0,
+  ymax=85,
+  ylabel={Failure Rate (\%)},
+  symbolic x coords={7B,7B-Coder,14B-Coder,32B-Coder,30B-Coder,14B-noComp},
+  xtick=data,
+  x tick label style={rotate=20,anchor=east},
+  legend style={at={(0.5,1.02)},anchor=south,legend columns=3}
+]
+\addplot+[fill=Red!55] coordinates {(7B,15.44) (7B-Coder,9.05) (14B-Coder,6.58) (32B-Coder,6.80) (30B-Coder,5.78) (14B-noComp,7.26)};
+\addplot+[fill=Orange!80] coordinates {(7B,21.24) (7B-Coder,20.76) (14B-Coder,16.63) (32B-Coder,16.33) (30B-Coder,13.33) (14B-noComp,80.92)};
+\addplot+[fill=Blue!60] coordinates {(7B,2.80) (7B-Coder,3.33) (14B-Coder,1.77) (32B-Coder,1.51) (30B-Coder,1.82) (14B-noComp,79.39)};
+\legend{Code execution,Data check,Chart type}
+\end{axis}
+\end{tikzpicture}
+\caption{Stacked failure composition from Table~\ref{tab:check_failures}. Data and chart-type checks dominate in the no-composer ablation.}
+\label{fig:appendix_failure_stack}
+\end{figure}
 
 
 \section{Quantization Impact Comparison}
@@ -740,14 +852,38 @@ $\Delta$ & \rd{+1.69\%} & \gr{-12.89\%} & \gr{+11.19\%} & \rd{+1.84\%} & \gr{-13
 \midrule
 \multicolumn{7}{c}{\textit{32B Models}} \\
 \midrule
-Qwen2.5-Coder-32B (FP16) & 5.70\% & 30.46\% & 63.84\% & 9.15\% & 40.17\% & 50.67\% \\
-Qwen2.5-Coder-32B-AWQ (INT4) & 6.44\% & 17.89\% & 75.67\% & 9.44\% & 26.13\% & 64.44\% \\
-$\Delta$ & \rd{+0.74\%} & \gr{-12.57\%} & \gr{+11.83\%} & \rd{+0.29\%} & \gr{-14.04\%} & \gr{+13.77\%} \\
+% Qwen2.5-Coder-32B (FP16) & 5.70\% & 30.46\% & 63.84\% & 9.15\% & 40.17\% & 50.67\% \\
+Qwen2.5-Coder-32B-AWQ (INT4) & 5.67\% & 21.84\% & 72.50\% & 10.27\% & 26.01\% & 63.72\% \\
+$\Delta$ & \gr{-0.03\%} & \gr{-8.62\%} & \gr{+8.66\%} & \rd{+1.12\%} & \gr{-14.16\%} & \gr{+13.05\%} \\
 \bottomrule
 \end{tabular}
 \caption{Quantization impact on model performance. AWQ (INT4) quantization improves both pass rates and illegal rates across all model sizes, likely due to updated \texttt{VisEval} benchmark and refined prompting in quantized runs. The 7B coder-specialized quantized model substantially outperforms the FP16 general instruction model, confirming that code specialization matters more than quantization precision loss.}
 \label{tab:quantization_comparison}
 \end{table}
+
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  width=0.9\textwidth,
+  height=6.5cm,
+  ymin=35,
+  ymax=66,
+  ylabel={Multi-table Pass Rate (\%)},
+  symbolic x coords={7B,14B,32B},
+  xtick=data,
+  legend style={at={(0.5,1.02)},anchor=south,legend columns=2},
+  ymajorgrids=true,
+  grid style=dashed
+]
+\addplot+[mark=o,thick,Blue!70] coordinates {(7B,37.25) (14B,51.60) (32B,50.67)};
+\addplot+[mark=square*,thick,Green!60!Black] coordinates {(7B,52.41) (14B,63.46) (32B,63.72)};
+\legend{FP16 baseline,AWQ (INT4)}
+\end{axis}
+\end{tikzpicture}
+\caption{Quantization trend from Table~\ref{tab:quantization_comparison}: AWQ consistently improves multi-table pass rate across model scales.}
+\label{fig:appendix_quantization_trend}
+\end{figure}
 
 % \backmatter
 \chapter{Ehrenwörtliche Erklärung}
